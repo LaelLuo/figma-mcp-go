@@ -8,6 +8,12 @@
 
 **Tech Stack:** Go 1.26, `mark3labs/mcp-go`, Figma Plugin API, TypeScript, Bun, Vite, Svelte
 
+> **Execution status (2026-04-08):**
+> - Tasks 1-6 are implemented and landed as incremental commits.
+> - Task 7 automated verification and local rebuild have been re-run successfully.
+> - The only remaining acceptance gap is a positive live `get_figjam` smoke test inside an actual FigJam file.
+> - This rollout was finished as sliced commits instead of one final squash-style integration commit.
+
 ---
 
 ## File Structure
@@ -89,7 +95,7 @@
 - Modify: `npm/package.json`
 - Reference: `docs/superpowers/specs/2026-04-08-figma-fallback-alignment-design.md`
 
-- [ ] **Step 1: Capture the current public wording before editing**
+- [x] **Step 1: Capture the current public wording before editing**
 
 Run:
 
@@ -99,7 +105,7 @@ rg -n "No Rate Limits|58 tools|Installation & Setup|Available Tools|description"
 
 Expected: current copy still presents the project primarily as an unlimited generic Figma MCP server.
 
-- [ ] **Step 2: Rewrite the README introduction and setup guidance**
+- [x] **Step 2: Rewrite the README introduction and setup guidance**
 
 Make these changes in `README.md`:
 
@@ -114,7 +120,7 @@ Make these changes in `README.md`:
 - Explicitly call out Starter plan tool-call limits as the main fallback trigger.
 ```
 
-- [ ] **Step 3: Align registry/package descriptions**
+- [x] **Step 3: Align registry/package descriptions**
 
 Update `server.json` and `npm/package.json` descriptions so they describe `figma-mcp-go` as:
 
@@ -122,7 +128,7 @@ Update `server.json` and `npm/package.json` descriptions so they describe `figma
 Local fallback MCP for the official Figma MCP, providing desktop/plugin read-write access when the official server is rate-limited, unavailable, or unsuitable for local workflows.
 ```
 
-- [ ] **Step 4: Verify the public docs now reflect the fallback architecture**
+- [x] **Step 4: Verify the public docs now reflect the fallback architecture**
 
 Run:
 
@@ -132,7 +138,7 @@ rg -n "When to use which MCP|Official-style fallback tools|Official-only|fallbac
 
 Expected: the new dual-MCP language and fallback wording appear in all three files.
 
-- [ ] **Step 5: Commit the docs-only slice**
+- [x] **Step 5: Commit the docs-only slice**
 
 Run:
 
@@ -156,7 +162,7 @@ Expected: one docs-only commit with no code changes.
 - Modify: `internal/bridge.go`
 - Modify: `internal/tools_handler_test.go`
 
-- [ ] **Step 1: Write validation tests for the new contracts**
+- [x] **Step 1: Write validation tests for the new contracts**
 
 Add failing tests in `internal/schema_test.go` for:
 
@@ -178,7 +184,7 @@ Cover:
 - nodeId stays colon-format only
 ```
 
-- [ ] **Step 2: Run the targeted Go tests and confirm they fail for the missing validation paths**
+- [x] **Step 2: Run the targeted Go tests and confirm they fail for the missing validation paths**
 
 Run:
 
@@ -188,7 +194,7 @@ go test ./internal -run 'TestValidateRPC_(UseFigma|GetMetadata_OfficialArgs|GetD
 
 Expected: FAIL because the new validation logic does not exist yet.
 
-- [ ] **Step 3: Implement schema validation and register `use_figma`**
+- [x] **Step 3: Implement schema validation and register `use_figma`**
 
 Implement:
 
@@ -211,7 +217,7 @@ get_figjam
 get_variable_defs
 ```
 
-- [ ] **Step 4: Add a request-timeout policy instead of hard-coded special cases**
+- [x] **Step 4: Add a request-timeout policy instead of hard-coded special cases**
 
 Replace the current `get_document`-only timeout branch in `internal/bridge.go` with a helper such as:
 
@@ -228,7 +234,7 @@ func timeoutForRequest(requestType string) time.Duration {
 
 This keeps the “Figma may hang for a while” cases explicit and testable.
 
-- [ ] **Step 5: Add MCP smoke-path coverage for the new registration**
+- [x] **Step 5: Add MCP smoke-path coverage for the new registration**
 
 Extend `internal/tools_handler_test.go` so it exercises:
 
@@ -246,7 +252,7 @@ callTool(t, s, "get_figjam", map[string]any{
 })
 ```
 
-- [ ] **Step 6: Run the affected Go tests and confirm they pass**
+- [x] **Step 6: Run the affected Go tests and confirm they pass**
 
 Run:
 
@@ -256,7 +262,7 @@ go test ./internal -run 'Test(ValidateRPC|Handlers_)'
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the Go contract slice**
+- [x] **Step 7: Commit the Go contract slice**
 
 Run:
 
@@ -274,7 +280,7 @@ git commit -m ':sparkles: feat(mcp): 增加官方风格 fallback 工具契约' -
 - Modify: `internal/tools_test.go`
 - Modify: `internal/tools_handler_test.go`
 
-- [ ] **Step 1: Write failing response-shape tests**
+- [x] **Step 1: Write failing response-shape tests**
 
 Add tests in `internal/tools_test.go` that assert:
 
@@ -292,7 +298,7 @@ Expect:
 - get_variable_defs returns structured content in a stable compatibility envelope
 ```
 
-- [ ] **Step 2: Run the targeted test set and confirm it fails**
+- [x] **Step 2: Run the targeted test set and confirm it fails**
 
 Run:
 
@@ -302,7 +308,7 @@ go test ./internal -run 'TestRender(Metadata|DesignContext|VariableDefs)Response
 
 Expected: FAIL because the custom renderers do not exist yet.
 
-- [ ] **Step 3: Implement official-style handlers for the reshaped tools**
+- [x] **Step 3: Implement official-style handlers for the reshaped tools**
 
 In `internal/tools_read_document.go` and `internal/tools_read_styles.go`:
 
@@ -315,7 +321,7 @@ In `internal/tools_read_document.go` and `internal/tools_read_styles.go`:
 
 Do not keep the old “depth/detail/dedupe only” path as the sole public contract. If legacy local options remain, document them as compatibility extensions rather than the primary surface.
 
-- [ ] **Step 4: Make `get_design_context` screenshot-capable on the Go side**
+- [x] **Step 4: Make `get_design_context` screenshot-capable on the Go side**
 
 Add a renderer that can translate plugin output like:
 
@@ -338,7 +344,7 @@ into MCP content blocks:
 3. structuredContent containing the full compatibility payload
 ```
 
-- [ ] **Step 5: Re-run the focused tests**
+- [x] **Step 5: Re-run the focused tests**
 
 Run:
 
@@ -348,7 +354,7 @@ go test ./internal -run 'Test(Render|Handlers_).*'
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the Go response-layer slice**
+- [x] **Step 6: Commit the Go response-layer slice**
 
 Run:
 
@@ -367,7 +373,7 @@ git commit -m ':recycle: refactor(read): 调整官方风格工具返回结构' -
 - Create: `plugin/src/use-figma.test.ts`
 - Modify: `plugin/src/main.ts`
 
-- [ ] **Step 1: Write failing tests for the execution wrapper**
+- [x] **Step 1: Write failing tests for the execution wrapper**
 
 Create `plugin/src/use-figma.test.ts` with cases for:
 
@@ -378,7 +384,7 @@ it("supports top-level await semantics via async wrapper")
 it("returns undefined cleanly when code does not explicitly return")
 ```
 
-- [ ] **Step 2: Run the plugin test subset and confirm it fails**
+- [x] **Step 2: Run the plugin test subset and confirm it fails**
 
 Run:
 
@@ -388,7 +394,7 @@ bun test plugin/src/use-figma.test.ts
 
 Expected: FAIL because the executor file does not exist yet.
 
-- [ ] **Step 3: Implement the execution wrapper**
+- [x] **Step 3: Implement the execution wrapper**
 
 In `plugin/src/use-figma.ts`, use an async function wrapper similar to:
 
@@ -412,11 +418,11 @@ Requirements:
 - Do not silently swallow exceptions
 ```
 
-- [ ] **Step 4: Wire `use_figma` into `plugin/src/main.ts`**
+- [x] **Step 4: Wire `use_figma` into `plugin/src/main.ts`**
 
 Extend the dispatcher so `use_figma` is handled before falling through to legacy read/write handlers.
 
-- [ ] **Step 5: Re-run the plugin tests**
+- [x] **Step 5: Re-run the plugin tests**
 
 Run:
 
@@ -426,7 +432,7 @@ bun test plugin/src/use-figma.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the plugin execution slice**
+- [x] **Step 6: Commit the plugin execution slice**
 
 Run:
 
@@ -445,7 +451,7 @@ git commit -m ':sparkles: feat(plugin): 支持 use_figma 任意脚本执行' -m 
 - Modify: `plugin/src/read-styles.test.ts`
 - Modify: `plugin/src/serializers.test.ts`
 
-- [ ] **Step 1: Add failing tests for the new read envelopes**
+- [x] **Step 1: Add failing tests for the new read envelopes**
 
 Add tests that cover:
 
@@ -456,7 +462,7 @@ Add tests that cover:
 - get_variable_defs returns collections/modes/variables in the new envelope
 ```
 
-- [ ] **Step 2: Run the focused plugin test set and confirm it fails**
+- [x] **Step 2: Run the focused plugin test set and confirm it fails**
 
 Run:
 
@@ -466,7 +472,7 @@ bun test plugin/src/read-styles.test.ts plugin/src/serializers.test.ts
 
 Expected: FAIL because the compatibility envelopes are not implemented yet.
 
-- [ ] **Step 3: Rework `get_metadata` away from the current file-summary-only contract**
+- [x] **Step 3: Rework `get_metadata` away from the current file-summary-only contract**
 
 Implement a lightweight metadata result that can support official-style structure recovery. A minimal acceptable Phase 1 shape is:
 
@@ -482,7 +488,7 @@ Implement a lightweight metadata result that can support official-style structur
 
 This keeps the official “XML-ish metadata” expectation alive without pretending to be cloud-complete.
 
-- [ ] **Step 4: Implement a degraded-but-honest `get_design_context` envelope**
+- [x] **Step 4: Implement a degraded-but-honest `get_design_context` envelope**
 
 Return a stable shape such as:
 
@@ -512,7 +518,7 @@ Rules:
 - Treat disableCodeConnect as accepted but no-op metadata in local fallback mode.
 ```
 
-- [ ] **Step 5: Implement `get_figjam` and official-style `get_variable_defs`**
+- [x] **Step 5: Implement `get_figjam` and official-style `get_variable_defs`**
 
 Requirements:
 
@@ -522,7 +528,7 @@ Requirements:
 - get_variable_defs: keep local variable scanning logic, but wrap it in a compatibility payload that states these are current-file variables only
 ```
 
-- [ ] **Step 6: Re-run plugin verification**
+- [x] **Step 6: Re-run plugin verification**
 
 Run:
 
@@ -533,7 +539,7 @@ bun run build
 
 Expected: PASS for both tests and build.
 
-- [ ] **Step 7: Commit the plugin read slice**
+- [x] **Step 7: Commit the plugin read slice**
 
 Run:
 
@@ -555,7 +561,7 @@ git commit -m ':sparkles: feat(plugin): 对齐官方风格读取工具语义' -m
 - Modify: `internal/prompts/reaction_to_connector_strategy.go`
 - Modify: `internal/prompts/prompts_test.go`
 
-- [ ] **Step 1: Update prompt text to match the coexistence model**
+- [x] **Step 1: Update prompt text to match the coexistence model**
 
 Make the prompts teach:
 
@@ -566,7 +572,7 @@ Make the prompts teach:
 - local variable visibility is not the same thing as remote library/design-system search
 ```
 
-- [ ] **Step 2: Add or update prompt assertions**
+- [x] **Step 2: Add or update prompt assertions**
 
 In `internal/prompts/prompts_test.go`, assert that key prompt strings reference:
 
@@ -577,7 +583,7 @@ In `internal/prompts/prompts_test.go`, assert that key prompt strings reference:
 "get_metadata"
 ```
 
-- [ ] **Step 3: Run the prompt-specific tests**
+- [x] **Step 3: Run the prompt-specific tests**
 
 Run:
 
@@ -587,7 +593,7 @@ go test ./internal/prompts
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit the prompt refresh**
+- [x] **Step 4: Commit the prompt refresh**
 
 Run:
 
@@ -604,7 +610,7 @@ git commit -m ':memo: docs(prompts): 更新官方 MCP 与 fallback 协作指引'
 - Reference: `docs/superpowers/specs/2026-04-08-figma-fallback-alignment-design.md`
 - Reference: `docs/superpowers/plans/2026-04-08-figma-fallback-phase-1-implementation.md`
 
-- [ ] **Step 1: Run the full automated verification suite**
+- [x] **Step 1: Run the full automated verification suite**
 
 Run:
 
@@ -628,6 +634,15 @@ Expected: PASS on all three commands.
 
 - [ ] **Step 2: Run live fallback smoke tests against an open Figma desktop session**
 
+Status on 2026-04-08:
+
+```text
+- Verified in a design file: get_screenshot, use_figma, get_metadata,
+  get_design_context, get_variable_defs
+- Verified negative path: get_figjam rejects design files clearly
+- Still pending: a positive get_figjam smoke in an actual FigJam file
+```
+
 Manual checks:
 
 ```text
@@ -639,7 +654,7 @@ Manual checks:
 6. get_variable_defs returns local collections with the compatibility warning/metadata
 ```
 
-- [ ] **Step 3: Rebuild and refresh the local binary if verification passes**
+- [x] **Step 3: Rebuild and refresh the local binary if verification passes**
 
 Run:
 
@@ -651,6 +666,8 @@ Expected: fresh binary is produced with the Phase 1 behavior.
 
 - [ ] **Step 4: Create the final integration commit**
 
+Note: implementation landed as a sequence of focused commits (`8195137`, `fd148c1`, `a9efeab`, `3ba67c9`, `30a9fd8`) rather than a single squash-style integration commit. Keep this unchecked until a dedicated wrap-up commit is created.
+
 Run:
 
 ```powershell
@@ -661,13 +678,13 @@ git commit -m ':rocket: feat(fallback): 完成 Phase 1 官方 MCP 对齐' -m 'WH
 
 ## Acceptance Checklist
 
-- [ ] README 明确推荐双 MCP 并存，而不是替代官方 MCP
-- [ ] `use_figma` 可执行任意 JS，并支持 top-level `await`
-- [ ] `get_metadata`、`get_design_context`、`get_figjam`、`get_variable_defs` 接受官方风格参数
-- [ ] `get_design_context` 可返回文本 + 可选截图 + structured content
-- [ ] 长耗时工具不会因为 30 秒默认超时而误失败
-- [ ] 内置 prompts 不再教授旧的单机语义作为唯一推荐路径
-- [ ] `go test ./...`、`bun test`、`bun run build` 通过
+- [x] README 明确推荐双 MCP 并存，而不是替代官方 MCP
+- [x] `use_figma` 可执行任意 JS，并支持 top-level `await`
+- [x] `get_metadata`、`get_design_context`、`get_figjam`、`get_variable_defs` 接受官方风格参数
+- [x] `get_design_context` 可返回文本 + 可选截图 + structured content
+- [x] 长耗时工具不会因为 30 秒默认超时而误失败
+- [x] 内置 prompts 不再教授旧的单机语义作为唯一推荐路径
+- [x] `go test ./...`、`bun test`、`bun run build` 通过
 - [ ] Live Figma smoke tests 通过
 
 ## Notes for the Implementer

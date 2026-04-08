@@ -122,12 +122,12 @@ claude mcp add -s project figma-mcp-go -- npx -y @vkhanhqui/figma-mcp-go@latest
 
 | Tool / Capability | Official MCP | figma-mcp-go | Strategy |
 | --- | --- | --- | --- |
-| `use_figma` | Supported | In progress | Local fallback priority |
+| `use_figma` | Supported | Supported | Local fallback priority |
 | `get_screenshot` | Supported | Supported | Return MCP image content plus structured metadata |
-| `get_metadata` | Supported | In progress | Align local output toward official-style expectations |
-| `get_design_context` | Supported | In progress | Stable fallback first, full parity later |
-| `get_figjam` | Supported | In progress | Local implementation when current file is FigJam |
-| `get_variable_defs` | Supported | In progress | Current-file variables only |
+| `get_metadata` | Supported | Supported | Official-style compatibility envelope for local metadata recovery |
+| `get_design_context` | Supported | Supported | Text + structured content + optional screenshot, with honest degraded fallback |
+| `get_figjam` | Supported | Supported | Local implementation when current file is FigJam; rejects design files clearly |
+| `get_variable_defs` | Supported | Supported | Current-file variables only |
 | `whoami` | Supported | Not equivalent locally | Official-only |
 | `create_new_file` | Supported | Not supported locally | Official-only |
 | `search_design_system` | Supported | Not equivalent locally | Official-only |
@@ -143,12 +143,12 @@ These tools are the primary compatibility surface for Codex Figma skills and for
 
 | Tool | Status | Notes |
 |------|--------|-------|
-| `use_figma` | In progress | Official-style local JS execution entry point |
-| `get_metadata` | In progress | Moving toward official-style metadata recovery flow |
-| `get_design_context` | In progress | Moving toward official-style design context envelope |
+| `use_figma` | Supported | Official-style local JS execution entry point |
+| `get_metadata` | Supported | Official-style compatibility envelope for local metadata recovery |
+| `get_design_context` | Supported | Text + structured content + optional screenshot, with honest degraded fallback |
 | `get_screenshot` | Supported | Returns MCP image content plus structured metadata |
-| `get_figjam` | In progress | Local FigJam fallback |
-| `get_variable_defs` | In progress | Official-style args; local variable visibility only |
+| `get_figjam` | Supported | Local FigJam fallback; rejects design files clearly |
+| `get_variable_defs` | Supported | Official-style args; local variable visibility only |
 
 ### Legacy local tools
 
