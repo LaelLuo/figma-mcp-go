@@ -125,6 +125,121 @@ func TestRenderScreenshotResponse_SuccessIncludesImageContent(t *testing.T) {
 	}
 }
 
+func TestRenderMetadataResponse_ReturnsTextEnvelope(t *testing.T) {
+	result, err := renderMetadataResponse(BridgeResponse{
+		Data: map[string]any{
+			"nodeId":       "1:1",
+			"metadataText": "<metadata source=\"figma-mcp-go\" />",
+			"source":       "figma-mcp-go",
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("expected successful metadata response")
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("expected structured content for metadata response")
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("expected 1 content block, got %d", len(result.Content))
+	}
+
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected text content, got %T", result.Content[0])
+	}
+	if text.Text != "<metadata source=\"figma-mcp-go\" />" {
+		t.Fatalf("unexpected metadata text: %q", text.Text)
+	}
+}
+
+func TestRenderDesignContextResponse_IncludesStructuredContentAndOptionalImage(t *testing.T) {
+	image := base64.StdEncoding.EncodeToString([]byte("context-image"))
+
+	result, err := renderDesignContextResponse(BridgeResponse{
+		Data: map[string]any{
+			"nodeId": "1:1",
+			"name":   "Card",
+			"code":   "{\n  \"notice\": \"fallback\"\n}",
+			"metadata": map[string]any{
+				"source":   "figma-mcp-go",
+				"degraded": true,
+				"message":  "Local fallback response",
+			},
+			"screenshot": map[string]any{
+				"mimeType": "image/png",
+				"base64":   image,
+			},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("expected successful design context response")
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("expected structured content for design context response")
+	}
+	if len(result.Content) != 2 {
+		t.Fatalf("expected 2 content blocks, got %d", len(result.Content))
+	}
+
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected first content block to be text, got %T", result.Content[0])
+	}
+	if text.Text == "" {
+		t.Fatal("expected non-empty design context text")
+	}
+
+	renderedImage, ok := result.Content[1].(mcp.ImageContent)
+	if !ok {
+		t.Fatalf("expected second content block to be image, got %T", result.Content[1])
+	}
+	if renderedImage.Data != image {
+		t.Fatalf("unexpected image payload")
+	}
+	if renderedImage.MIMEType != "image/png" {
+		t.Fatalf("unexpected image MIME type: %s", renderedImage.MIMEType)
+	}
+}
+
+func TestRenderVariableDefsResponse_PreservesStructuredContent(t *testing.T) {
+	result, err := renderVariableDefsResponse(BridgeResponse{
+		Data: map[string]any{
+			"source":  "figma-mcp-go",
+			"scope":   "local-file",
+			"message": "Local fallback exposes variables defined in this file.",
+			"collections": []any{
+				map[string]any{"id": "col:1", "name": "Brand"},
+			},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("expected successful variable defs response")
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("expected structured content for variable defs response")
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("expected 1 content block, got %d", len(result.Content))
+	}
+
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected text content, got %T", result.Content[0])
+	}
+	if text.Text == "" {
+		t.Fatal("expected non-empty variable defs text")
+	}
+}
+
 // ── toStringSlice ─────────────────────────────────────────────────────────────
 
 func TestToStringSlice(t *testing.T) {

@@ -32,7 +32,7 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		resp, err := node.Send(ctx, "get_metadata", nil, collectArgs(req, "fileKey", "nodeId", "clientFrameworks", "clientLanguages"))
-		return renderResponse(resp, err)
+		return renderMetadataResponse(resp, err)
 	})
 
 	s.AddTool(mcp.NewTool("get_selection",
@@ -117,7 +117,7 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 			params["dedupeComponents"] = true
 		}
 		resp, err := node.Send(ctx, "get_design_context", nil, params)
-		return renderResponse(resp, err)
+		return renderDesignContextResponse(resp, err)
 	})
 
 	s.AddTool(mcp.NewTool("get_figjam",
@@ -133,7 +133,7 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		resp, err := node.Send(ctx, "get_figjam", nil, collectArgs(req, "fileKey", "nodeId", "includeImagesOfNodes"))
-		return renderResponse(resp, err)
+		return renderFigJamResponse(resp, err)
 	})
 
 	s.AddTool(mcp.NewTool("search_nodes",

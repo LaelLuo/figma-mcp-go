@@ -197,3 +197,34 @@ describe("export_tokens", () => {
     expect(res?.data.tokens["_styles"]).toBeUndefined();
   });
 });
+
+describe("get_variable_defs", () => {
+  it("returns compatibility envelope with source and scope metadata", async () => {
+    (globalThis as any).figma.variables = {
+      getLocalVariableCollectionsAsync: async () => [
+        {
+          id: "col:1",
+          name: "Brand",
+          modes: [{ modeId: "m1", name: "Default" }],
+          variableIds: ["var:1"],
+        },
+      ],
+      getVariableByIdAsync: async (id: string) =>
+        id === "var:1"
+          ? {
+              id: "var:1",
+              name: "color/primary",
+              resolvedType: "COLOR",
+              valuesByMode: { m1: { r: 1, g: 0, b: 0, a: 1 } },
+            }
+          : null,
+    };
+
+    const res = await handleReadStyleRequest(makeRequest("get_variable_defs"));
+
+    expect(res?.data.source).toBe("figma-mcp-go");
+    expect(res?.data.scope).toBe("local-file");
+    expect(res?.data.collections).toHaveLength(1);
+    expect(res?.data.collections[0].variables[0].name).toBe("color/primary");
+  });
+});

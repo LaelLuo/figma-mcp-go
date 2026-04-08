@@ -1,5 +1,120 @@
 import { serializeNode, getBounds, serializeStyles, isMixed, deduplicateStyles } from "./serializers";
 
+const FALLBACK_SOURCE = "figma-mcp-go";
+const MAX_DESIGN_CONTEXT_CODE_LENGTH = 120000;
+
+const escapeXml = (value: any) =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+const getPageSummaries = () =>
+  figma.root.children.map((page) => ({
+    id: page.id,
+    name: page.name,
+    current: page.id === figma.currentPage.id,
+  }));
+
+const getNodeById = async (nodeId: string) => {
+  const node = await figma.getNodeByIdAsync(nodeId);
+  if (!node || node.type === "DOCUMENT") {
+    throw new Error(`Node not found: ${nodeId}`);
+  }
+  return node;
+};
+
+const resolveTargetNodes = async (request: any, includeCurrentPage = true) => {
+  const nodeId = request.params && request.params.nodeId;
+  if (nodeId) {
+    return [await getNodeById(nodeId)];
+  }
+  const selection = figma.currentPage.selection ?? [];
+  if (selection.length > 0) {
+    return selection;
+  }
+  return includeCurrentPage ? [figma.currentPage] : [];
+};
+
+const serializeSparseNodeLine = (node: any) => {
+  const attrs = [
+    `id="${escapeXml(node.id)}"`,
+    `name="${escapeXml(node.name ?? "")}"`,
+    `type="${escapeXml(node.type)}"`,
+  ];
+  const bounds = getBounds(node);
+  if (bounds) {
+    attrs.push(
+      `x="${bounds.x}"`,
+      `y="${bounds.y}"`,
+      `width="${bounds.width}"`,
+      `height="${bounds.height}"`,
+    );
+  }
+  if ("children" in node && Array.isArray(node.children)) {
+    attrs.push(`childCount="${node.children.length}"`);
+  }
+  return `    <node ${attrs.join(" ")} />`;
+};
+
+const buildMetadataText = (kind: string, nodes: readonly any[]) => {
+  const pages = getPageSummaries();
+  return [
+    `<metadata source="${FALLBACK_SOURCE}" degraded="true" kind="${escapeXml(kind)}" selectionCount="${nodes.length}">`,
+    "  <pages>",
+    ...pages.map(
+      (page) =>
+        `    <page id="${escapeXml(page.id)}" name="${escapeXml(page.name)}" current="${page.current}" />`,
+    ),
+    "  </pages>",
+    "  <selection>",
+    ...nodes.map((node) => serializeSparseNodeLine(node)),
+    "  </selection>",
+    "</metadata>",
+  ].join("\n");
+};
+
+const buildFigJamMetadataText = (nodes: readonly any[]) => [
+  `<figjam source="${FALLBACK_SOURCE}" degraded="true" selectionCount="${nodes.length}">`,
+  "  <nodes>",
+  ...nodes.map((node) => serializeSparseNodeLine(node)),
+  "  </nodes>",
+  "</figjam>",
+].join("\n");
+
+const countSerializedNodes = (value: any): number => {
+  if (!value || typeof value !== "object") return 0;
+  if (Array.isArray(value)) return value.reduce((sum, item) => sum + countSerializedNodes(item), 0);
+  const childCount = Array.isArray(value.children) ? countSerializedNodes(value.children) : 0;
+  return ("id" in value && "type" in value ? 1 : 0) + childCount;
+};
+
+const exportNodeScreenshot = async (node: any) => {
+  const screenshot: any = {
+    nodeId: node.id,
+    mimeType: "image/png",
+    base64: null,
+  };
+  if ("width" in node) screenshot.width = node.width;
+  if ("height" in node) screenshot.height = node.height;
+  if (typeof node.exportAsync !== "function") {
+    screenshot.error = "PNG export is not available for this node in local fallback mode.";
+    return screenshot;
+  }
+  try {
+    const bytes = await node.exportAsync({
+      format: "PNG",
+      constraint: { type: "SCALE", value: 2 },
+    });
+    screenshot.base64 = figma.base64Encode(bytes);
+    return screenshot;
+  } catch (error) {
+    screenshot.error = error instanceof Error ? error.message : String(error);
+    return screenshot;
+  }
+};
+
 export const handleReadDocumentRequest = async (request: any) => {
   switch (request.type) {
     case "get_document": {
@@ -200,47 +315,130 @@ export const handleReadDocumentRequest = async (request: any) => {
         return Object.assign({}, serialized, { children: serializedChildren });
       };
 
-      const selection = figma.currentPage.selection;
-      const rawContextNodes =
-        selection.length > 0
-          ? await Promise.all(
-              selection.map((node) => serializeWithDepth(node, 0)),
-            )
-          : [await serializeWithDepth(figma.currentPage, 0)];
+      const targetNodes = await resolveTargetNodes(request);
+      const primaryNode = targetNodes[0];
+      const rawContextNodes = await Promise.all(
+        targetNodes.map((node) => serializeWithDepth(node, 0)),
+      );
       const { tree: dedupedNodes, globalVars } = deduplicateStyles({ children: rawContextNodes });
       const contextNodes = (dedupedNodes as any).children;
-      return {
-        type: request.type,
-        requestId: request.requestId,
-        data: {
-          fileName: figma.root.name,
+      const context: any = {
+        nodes: contextNodes,
+        ...(componentDefs.size > 0 ? { componentDefs: Object.fromEntries(componentDefs) } : {}),
+        ...(globalVars ? { globalVars } : {}),
+      };
+      const requestMetadata = {
+        disableCodeConnect: !!(request.params && request.params.disableCodeConnect),
+        forceCode: !!(request.params && request.params.forceCode),
+        clientFrameworks: request.params && request.params.clientFrameworks ? request.params.clientFrameworks : undefined,
+        clientLanguages: request.params && request.params.clientLanguages ? request.params.clientLanguages : undefined,
+        excludeScreenshot: !!(request.params && request.params.excludeScreenshot),
+      };
+      let metadataMessage =
+        "Local fallback response from figma-mcp-go. Code Connect and cloud-only enrichments are not available.";
+      let degraded = true;
+      let code = JSON.stringify(context, null, 2);
+      const serializedNodeCount = countSerializedNodes(context.nodes);
+      if (code.length > MAX_DESIGN_CONTEXT_CODE_LENGTH) {
+        degraded = true;
+        metadataMessage +=
+          " Context payload is large; prefer get_metadata plus targeted child get_design_context calls for narrower nodes.";
+        code = JSON.stringify(
+          {
+            notice:
+              "Context payload truncated in local fallback. Use get_metadata first, then fetch smaller child nodes with get_design_context.",
+            nodeId: primaryNode.id,
+            nodeName: primaryNode.name,
+            nodeCount: serializedNodeCount,
+          },
+          null,
+          2,
+        );
+      }
+      const data: any = {
+        fileKey: null,
+        nodeId: primaryNode.id,
+        name: primaryNode.name,
+        code,
+        metadata: {
+          source: FALLBACK_SOURCE,
+          degraded,
+          message: metadataMessage,
+          request: requestMetadata,
+          nodeCount: serializedNodeCount,
           currentPage: {
             id: figma.currentPage.id,
             name: figma.currentPage.name,
           },
-          selectionCount: selection.length,
-          context: contextNodes,
-          ...(componentDefs.size > 0 ? { componentDefs: Object.fromEntries(componentDefs) } : {}),
-          ...(globalVars ? { globalVars } : {}),
         },
+        context,
+      };
+      if (!(request.params && request.params.excludeScreenshot)) {
+        data.screenshot = await exportNodeScreenshot(primaryNode);
+      }
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data,
       };
     }
 
-    case "get_metadata":
+    case "get_metadata": {
+      const targetNodes = await resolveTargetNodes(request);
+      const kind =
+        request.params && request.params.nodeId
+          ? "node"
+          : targetNodes[0]?.type === "PAGE"
+            ? "page"
+            : "selection";
       return {
         type: request.type,
         requestId: request.requestId,
         data: {
-          fileName: figma.root.name,
-          currentPageId: figma.currentPage.id,
-          currentPageName: figma.currentPage.name,
-          pageCount: figma.root.children.length,
-          pages: figma.root.children.map((page) => ({
-            id: page.id,
-            name: page.name,
-          })),
+          fileKey: null,
+          nodeId: targetNodes[0]?.id ?? null,
+          kind,
+          source: FALLBACK_SOURCE,
+          degraded: true,
+          metadataText: buildMetadataText(kind, targetNodes),
+          pages: getPageSummaries(),
         },
       };
+    }
+
+    case "get_figjam": {
+      if (figma.editorType !== "figjam") {
+        throw new Error("get_figjam is only available in FigJam files");
+      }
+      const nodeId =
+        request.params && request.params.nodeId && request.params.nodeId !== "0:1"
+          ? request.params.nodeId
+          : null;
+      const targetNodes = nodeId
+        ? [await getNodeById(nodeId)]
+        : await resolveTargetNodes(request);
+      const primaryNode = targetNodes[0];
+      const tree = await Promise.all(targetNodes.map((node) => serializeNode(node)));
+      const data: any = {
+        fileKey: null,
+        nodeId: primaryNode.id,
+        editorType: figma.editorType,
+        source: FALLBACK_SOURCE,
+        degraded: true,
+        includeImagesOfNodes: !!(request.params && request.params.includeImagesOfNodes),
+        metadataText: buildFigJamMetadataText(targetNodes),
+        context: tree,
+        tree,
+      };
+      if (request.params && request.params.includeImagesOfNodes) {
+        data.images = await Promise.all(targetNodes.map((node) => exportNodeScreenshot(node)));
+      }
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data,
+      };
+    }
 
     case "get_pages":
       return {

@@ -82,7 +82,14 @@ export const handleReadStyleRequest = async (request: any) => {
       return {
         type: request.type,
         requestId: request.requestId,
-        data: { collections: variableData },
+        data: {
+          source: "figma-mcp-go",
+          scope: "local-file",
+          degraded: true,
+          message:
+            "Local fallback exposes variables defined in this file. It does not replace official design-system or cloud-backed variable discovery.",
+          collections: variableData,
+        },
       };
     }
 

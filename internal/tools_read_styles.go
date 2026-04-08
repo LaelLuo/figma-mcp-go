@@ -28,7 +28,7 @@ func registerReadStyleTools(s *server.MCPServer, node *Node) {
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		resp, err := node.Send(ctx, "get_variable_defs", nil, collectArgs(req, "fileKey", "nodeId", "clientFrameworks", "clientLanguages"))
-		return renderResponse(resp, err)
+		return renderVariableDefsResponse(resp, err)
 	})
 
 	s.AddTool(mcp.NewTool("get_local_components",

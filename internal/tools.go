@@ -84,6 +84,220 @@ func renderScreenshotResponse(resp BridgeResponse, err error) (*mcp.CallToolResu
 	}, nil
 }
 
+func renderMetadataResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, error) {
+	return renderStructuredTextResponse(resp, err, func(data map[string]interface{}) string {
+		if metadataText, _ := data["metadataText"].(string); strings.TrimSpace(metadataText) != "" {
+			return metadataText
+		}
+		return ""
+	})
+}
+
+func renderVariableDefsResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, error) {
+	return renderStructuredTextResponse(resp, err, func(data map[string]interface{}) string {
+		message, _ := data["message"].(string)
+		scope, _ := data["scope"].(string)
+		source, _ := data["source"].(string)
+		if message != "" {
+			if scope != "" && source != "" {
+				return fmt.Sprintf("%s\n\nsource=%s\nscope=%s", message, source, scope)
+			}
+			return message
+		}
+		return ""
+	})
+}
+
+func renderDesignContextResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, error) {
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if resp.Error != "" {
+		return mcp.NewToolResultError(resp.Error), nil
+	}
+
+	data, err := asStringMap(resp.Data)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("parse design context response: %v", err)), nil
+	}
+
+	content := []mcp.Content{
+		mcp.TextContent{
+			Type: mcp.ContentTypeText,
+			Text: buildDesignContextText(data),
+		},
+	}
+
+	if screenshot := extractNestedMap(data, "screenshot"); len(screenshot) > 0 {
+		if imageData, _ := screenshot["base64"].(string); imageData != "" {
+			mimeType, _ := screenshot["mimeType"].(string)
+			if mimeType == "" {
+				mimeType = "image/png"
+			}
+			content = append(content, mcp.ImageContent{
+				Type:     mcp.ContentTypeImage,
+				Data:     imageData,
+				MIMEType: mimeType,
+			})
+		}
+	}
+
+	return &mcp.CallToolResult{
+		Content:           content,
+		StructuredContent: resp.Data,
+	}, nil
+}
+
+func renderFigJamResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, error) {
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if resp.Error != "" {
+		return mcp.NewToolResultError(resp.Error), nil
+	}
+
+	data, err := asStringMap(resp.Data)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("parse figjam response: %v", err)), nil
+	}
+
+	content := []mcp.Content{
+		mcp.TextContent{
+			Type: mcp.ContentTypeText,
+			Text: firstNonEmptyString(
+				stringFromMap(data, "metadataText"),
+				stringFromMap(data, "message"),
+				mustJSON(data),
+			),
+		},
+	}
+
+	if rawImages, ok := data["images"].([]interface{}); ok {
+		for _, rawImage := range rawImages {
+			imageMap, ok := rawImage.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			imageData, _ := imageMap["base64"].(string)
+			if imageData == "" {
+				continue
+			}
+			mimeType, _ := imageMap["mimeType"].(string)
+			if mimeType == "" {
+				mimeType = "image/png"
+			}
+			content = append(content, mcp.ImageContent{
+				Type:     mcp.ContentTypeImage,
+				Data:     imageData,
+				MIMEType: mimeType,
+			})
+		}
+	}
+
+	return &mcp.CallToolResult{
+		Content:           content,
+		StructuredContent: resp.Data,
+	}, nil
+}
+
+func renderStructuredTextResponse(resp BridgeResponse, err error, textBuilder func(map[string]interface{}) string) (*mcp.CallToolResult, error) {
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if resp.Error != "" {
+		return mcp.NewToolResultError(resp.Error), nil
+	}
+
+	data, err := asStringMap(resp.Data)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("parse response: %v", err)), nil
+	}
+
+	text := textBuilder(data)
+	if strings.TrimSpace(text) == "" {
+		text = mustJSON(data)
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: mcp.ContentTypeText,
+				Text: text,
+			},
+		},
+		StructuredContent: resp.Data,
+	}, nil
+}
+
+func asStringMap(data interface{}) (map[string]interface{}, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(b, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func buildDesignContextText(data map[string]interface{}) string {
+	code := stringFromMap(data, "code")
+	metadata := extractNestedMap(data, "metadata")
+	message := stringFromMap(metadata, "message")
+	name := stringFromMap(data, "name")
+	nodeID := stringFromMap(data, "nodeId")
+
+	parts := make([]string, 0, 3)
+	if name != "" || nodeID != "" {
+		parts = append(parts, strings.TrimSpace(fmt.Sprintf("Design context for %s (%s)", name, nodeID)))
+	}
+	if message != "" {
+		parts = append(parts, message)
+	}
+	if strings.TrimSpace(code) != "" {
+		parts = append(parts, code)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func extractNestedMap(data map[string]interface{}, key string) map[string]interface{} {
+	raw, ok := data[key]
+	if !ok {
+		return nil
+	}
+	nested, ok := raw.(map[string]interface{})
+	if ok {
+		return nested
+	}
+	return nil
+}
+
+func stringFromMap(data map[string]interface{}, key string) string {
+	if data == nil {
+		return ""
+	}
+	value, _ := data[key].(string)
+	return value
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func mustJSON(data interface{}) string {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
 // toStringSlice converts []interface{} to []string.
 func toStringSlice(raw []interface{}) []string {
 	out := make([]string, 0, len(raw))
