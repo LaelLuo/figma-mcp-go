@@ -99,6 +99,55 @@ func TestHandlers_GetDesignContext(t *testing.T) {
 	callTool(t, s, "get_design_context", nil)
 	// depth = 0 should be ignored (not passed through)
 	callTool(t, s, "get_design_context", map[string]any{"depth": float64(0)})
+	// official-style compatibility args
+	callTool(t, s, "get_design_context", map[string]any{
+		"fileKey":            "dummy",
+		"nodeId":             "1:1",
+		"clientFrameworks":   "react",
+		"clientLanguages":    "typescript",
+		"disableCodeConnect": true,
+		"excludeScreenshot":  true,
+		"forceCode":          true,
+	})
+}
+
+func TestHandlers_GetMetadata_OfficialArgs(t *testing.T) {
+	s, _ := newTestServer(t)
+	callTool(t, s, "get_metadata", map[string]any{
+		"fileKey":          "dummy",
+		"nodeId":           "1:1",
+		"clientFrameworks": "react",
+		"clientLanguages":  "typescript",
+	})
+}
+
+func TestHandlers_GetFigjam(t *testing.T) {
+	s, _ := newTestServer(t)
+	callTool(t, s, "get_figjam", map[string]any{
+		"fileKey":              "dummy",
+		"nodeId":               "0:1",
+		"includeImagesOfNodes": true,
+	})
+}
+
+func TestHandlers_UseFigma(t *testing.T) {
+	s, _ := newTestServer(t)
+	callTool(t, s, "use_figma", map[string]any{
+		"code":        "return figma.root.name",
+		"description": "Read file name",
+		"fileKey":     "dummy",
+		"skillNames":  "figma-use",
+	})
+}
+
+func TestHandlers_GetVariableDefs_OfficialArgs(t *testing.T) {
+	s, _ := newTestServer(t)
+	callTool(t, s, "get_variable_defs", map[string]any{
+		"fileKey":          "dummy",
+		"nodeId":           "1:1",
+		"clientFrameworks": "react",
+		"clientLanguages":  "typescript",
+	})
 }
 
 func TestHandlers_SearchNodes(t *testing.T) {

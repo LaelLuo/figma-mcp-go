@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // ── Ping ─────────────────────────────────────────────────────────────────────
@@ -23,6 +24,13 @@ func TestFollowerPing_Success(t *testing.T) {
 	f := NewFollower(srv.URL)
 	if !f.Ping(context.Background()) {
 		t.Error("expected Ping to return true for a responding server")
+	}
+}
+
+func TestNewFollower_TimeoutBudget(t *testing.T) {
+	f := NewFollower("http://localhost:19940")
+	if f.client.Timeout < 95*time.Second {
+		t.Fatalf("follower timeout = %s, want at least 95s", f.client.Timeout)
 	}
 }
 

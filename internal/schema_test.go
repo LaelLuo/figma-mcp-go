@@ -44,7 +44,7 @@ func TestNormalizeNodeID(t *testing.T) {
 		want  string
 	}{
 		{"4029-12345", "4029:12345"},
-		{"4029:12345", "4029:12345"},  // already valid, no-op
+		{"4029:12345", "4029:12345"},       // already valid, no-op
 		{"not-a-node-id", "not-a-node-id"}, // hyphen but not a node ID
 		{"", ""},
 	}
@@ -158,6 +158,102 @@ func TestValidateRPC_GetDesignContext(t *testing.T) {
 		if msg != "" {
 			t.Errorf("unexpected error for detail %s: %s", d, msg)
 		}
+	}
+}
+
+func TestValidateRPC_UseFigma(t *testing.T) {
+	if msg := ValidateRPC("use_figma", nil, nil); msg == "" {
+		t.Error("expected error for missing code")
+	}
+	if msg := ValidateRPC("use_figma", nil, map[string]interface{}{"code": "   "}); msg == "" {
+		t.Error("expected error for blank code")
+	}
+	if msg := ValidateRPC("use_figma", nil, map[string]interface{}{
+		"code":        "return figma.root.name",
+		"description": "Read root name",
+		"fileKey":     "dummy",
+		"skillNames":  "figma-use",
+	}); msg != "" {
+		t.Errorf("unexpected error: %s", msg)
+	}
+}
+
+func TestValidateRPC_GetMetadata_OfficialArgs(t *testing.T) {
+	valid := map[string]interface{}{
+		"fileKey":          "dummy",
+		"nodeId":           "1:1",
+		"clientFrameworks": "react",
+		"clientLanguages":  "typescript",
+	}
+	if msg := ValidateRPC("get_metadata", nil, valid); msg != "" {
+		t.Errorf("unexpected error: %s", msg)
+	}
+
+	if msg := ValidateRPC("get_metadata", nil, map[string]interface{}{"nodeId": "bad"}); msg == "" {
+		t.Error("expected error for invalid nodeId")
+	}
+}
+
+func TestValidateRPC_GetDesignContext_OfficialArgs(t *testing.T) {
+	valid := map[string]interface{}{
+		"fileKey":            "dummy",
+		"nodeId":             "1:1",
+		"clientFrameworks":   "react",
+		"clientLanguages":    "typescript",
+		"disableCodeConnect": true,
+		"excludeScreenshot":  true,
+		"forceCode":          true,
+		"depth":              float64(2),
+		"detail":             "compact",
+	}
+	if msg := ValidateRPC("get_design_context", nil, valid); msg != "" {
+		t.Errorf("unexpected error: %s", msg)
+	}
+
+	if msg := ValidateRPC("get_design_context", nil, map[string]interface{}{"nodeId": "bad"}); msg == "" {
+		t.Error("expected error for invalid nodeId")
+	}
+	if msg := ValidateRPC("get_design_context", nil, map[string]interface{}{"excludeScreenshot": "yes"}); msg == "" {
+		t.Error("expected error for non-boolean excludeScreenshot")
+	}
+	if msg := ValidateRPC("get_design_context", nil, map[string]interface{}{"forceCode": "yes"}); msg == "" {
+		t.Error("expected error for non-boolean forceCode")
+	}
+	if msg := ValidateRPC("get_design_context", nil, map[string]interface{}{"disableCodeConnect": "yes"}); msg == "" {
+		t.Error("expected error for non-boolean disableCodeConnect")
+	}
+}
+
+func TestValidateRPC_GetFigjam(t *testing.T) {
+	if msg := ValidateRPC("get_figjam", nil, map[string]interface{}{
+		"fileKey":              "dummy",
+		"nodeId":               "1:1",
+		"includeImagesOfNodes": true,
+	}); msg != "" {
+		t.Errorf("unexpected error: %s", msg)
+	}
+
+	if msg := ValidateRPC("get_figjam", nil, map[string]interface{}{"nodeId": "bad"}); msg == "" {
+		t.Error("expected error for invalid nodeId")
+	}
+	if msg := ValidateRPC("get_figjam", nil, map[string]interface{}{"includeImagesOfNodes": "yes"}); msg == "" {
+		t.Error("expected error for non-boolean includeImagesOfNodes")
+	}
+}
+
+func TestValidateRPC_GetVariableDefs_OfficialArgs(t *testing.T) {
+	valid := map[string]interface{}{
+		"fileKey":          "dummy",
+		"nodeId":           "1:1",
+		"clientFrameworks": "react",
+		"clientLanguages":  "typescript",
+	}
+	if msg := ValidateRPC("get_variable_defs", nil, valid); msg != "" {
+		t.Errorf("unexpected error: %s", msg)
+	}
+
+	if msg := ValidateRPC("get_variable_defs", nil, map[string]interface{}{"nodeId": "bad"}); msg == "" {
+		t.Error("expected error for invalid nodeId")
 	}
 }
 
@@ -847,11 +943,11 @@ func TestValidateAutoLayoutParams_InvalidValues(t *testing.T) {
 
 	// All valid auto-layout params together
 	msg := ValidateRPC("create_frame", nil, map[string]interface{}{
-		"primaryAxisAlignItems":  "CENTER",
-		"counterAxisAlignItems":  "BASELINE",
-		"primaryAxisSizingMode":  "AUTO",
-		"counterAxisSizingMode":  "FIXED",
-		"layoutWrap":             "WRAP",
+		"primaryAxisAlignItems": "CENTER",
+		"counterAxisAlignItems": "BASELINE",
+		"primaryAxisSizingMode": "AUTO",
+		"counterAxisSizingMode": "FIXED",
+		"layoutWrap":            "WRAP",
 	})
 	if msg != "" {
 		t.Errorf("unexpected error for valid auto-layout params: %s", msg)

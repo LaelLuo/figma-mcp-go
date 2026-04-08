@@ -1,15 +1,15 @@
 # figma-mcp-go
 
-Figma MCP — Free, No Rate Limits
+Local fallback MCP for the official Figma MCP
 
-Open-source Figma MCP server with full read/write access via plugin — no REST API, no rate limits. Turn text into designs and designs into real code. Works with Cursor, Claude, GitHub Copilot, and any MCP-compatible AI tool.
+`figma-mcp-go` is a local Figma desktop/plugin bridge MCP that complements the official Figma MCP. Keep the official remote MCP for cloud-native and team-library workflows, and use `figma-mcp-go` as the fallback when the official server is rate-limited, unavailable, or unsuitable for local desktop/plugin workflows.
 
 **Highlights**
-- No Figma API token required
-- No rate limits — free plan friendly
-- **Read and Write** live Figma data via plugin bridge — 58 tools total
-- Full design automation — styles, variables, components, prototypes, and content
-- Design strategies included — read_design_strategy, design_strategy, and more prompts built in
+- Keep the official `figma` MCP untouched and available
+- No Figma REST API token required for local fallback workflows
+- No official MCP rate-limit dependency for plugin-bridge reads and writes
+- Live desktop/plugin read-write access for styles, variables, components, prototypes, and content
+- Built-in prompts and compatibility work aimed at Codex Figma skill fallback usage
 
 https://github.com/user-attachments/assets/17bda971-0e83-4f18-8758-8ac2b8dcba62
 
@@ -17,9 +17,17 @@ https://github.com/user-attachments/assets/17bda971-0e83-4f18-8758-8ac2b8dcba62
 
 ## Why this exists
 
-Most Figma MCP servers rely on the **Figma REST API**.
+The official Figma MCP is still the right first choice for cloud-native capabilities. The problem is that many users, especially on Starter / View / Collab plans, can hit tool-call limits very quickly.
 
-That sounds fine… until you hit this:
+When that happens, a local fallback is often more useful than trying to replace the official server entirely.
+
+`figma-mcp-go` exists to cover the local side:
+
+- read and write the currently open desktop file through the plugin bridge
+- keep working when official MCP tool-call limits are exhausted
+- support live local workflows that do not need cloud-only APIs
+
+Typical trigger:
 
 | Plan | Limit |
 |------|-------|
@@ -27,20 +35,38 @@ That sounds fine… until you hit this:
 | Pro / Org (Dev seat) | 200 tool calls/day |
 | Enterprise | 600 tool calls/day |
 
-If you're experimenting with AI tools, you'll burn through that in minutes.
+If you're experimenting with AI-driven design workflows, that can disappear in minutes.
 
-I didn't have enough money to pay for higher limits.
-So I built something that **doesn't use the API at all**.
+This project does **not** proxy the official MCP. The recommended model is to keep both servers:
+
+- `figma`: official remote MCP
+- `figma-mcp-go`: local fallback MCP
 
 ---
 
 ## Installation & Setup
 
-Install via `npx` — no build step required. Watch the setup video or follow the steps below.
+Install via `npx` — no build step required. You can keep the official MCP and `figma-mcp-go` side-by-side.
 
 [![Watch the video](https://img.youtube.com/vi/DjqyU0GKv9k/sddefault.jpg)](https://youtu.be/DjqyU0GKv9k)
 
-### 1. Configure your AI tool
+### Recommended setup: keep both MCP servers
+
+Use the official MCP when you need:
+
+- cloud-native Figma capabilities
+- team libraries and remote design-system search
+- Code Connect workflows
+- generated design capture and account-aware operations
+
+Use `figma-mcp-go` when you need:
+
+- local desktop/plugin read-write access
+- a fallback after official MCP Starter-plan limits are exhausted
+- direct manipulation of the file currently open in Figma Desktop
+- local screenshots, exports, and automation that do not depend on REST APIs
+
+### 1. Configure `figma-mcp-go` in your AI tool
 
 **Claude Code CLI**
 ```bash
@@ -83,7 +109,50 @@ claude mcp add -s project figma-mcp-go -- npx -y @vkhanhqui/figma-mcp-go@latest
 
 ---
 
+## When to use which MCP
+
+| Situation | Recommended MCP |
+| --- | --- |
+| Need `whoami`, `create_new_file`, `generate_figma_design`, Code Connect, or design-system/library search | Official `figma` MCP |
+| Need local desktop/plugin read-write access to the file you already have open | `figma-mcp-go` |
+| Hit Starter-plan tool-call limits on the official MCP | `figma-mcp-go` fallback |
+| Need screenshot/export behavior without depending on remote quotas | `figma-mcp-go` |
+
+## Compatibility Matrix
+
+| Tool / Capability | Official MCP | figma-mcp-go | Strategy |
+| --- | --- | --- | --- |
+| `use_figma` | Supported | In progress | Local fallback priority |
+| `get_screenshot` | Supported | Supported | Return MCP image content plus structured metadata |
+| `get_metadata` | Supported | In progress | Align local output toward official-style expectations |
+| `get_design_context` | Supported | In progress | Stable fallback first, full parity later |
+| `get_figjam` | Supported | In progress | Local implementation when current file is FigJam |
+| `get_variable_defs` | Supported | In progress | Current-file variables only |
+| `whoami` | Supported | Not equivalent locally | Official-only |
+| `create_new_file` | Supported | Not supported locally | Official-only |
+| `search_design_system` | Supported | Not equivalent locally | Official-only |
+| `generate_figma_design` | Supported | Not supported locally | Official-only |
+| Code Connect tools | Supported | Not equivalent locally | Official-only |
+| `create_design_system_rules` | Supported | Not equivalent locally | Official-only |
+
 ## Available Tools
+
+### Official-style fallback tools
+
+These tools are the primary compatibility surface for Codex Figma skills and for switching away from the official MCP when needed:
+
+| Tool | Status | Notes |
+|------|--------|-------|
+| `use_figma` | In progress | Official-style local JS execution entry point |
+| `get_metadata` | In progress | Moving toward official-style metadata recovery flow |
+| `get_design_context` | In progress | Moving toward official-style design context envelope |
+| `get_screenshot` | Supported | Returns MCP image content plus structured metadata |
+| `get_figjam` | In progress | Local FigJam fallback |
+| `get_variable_defs` | In progress | Official-style args; local variable visibility only |
+
+### Legacy local tools
+
+The tools below remain supported and are useful for direct local automation, but they are not the main compatibility surface for official Figma MCP workflows.
 
 ### Write — Create
 
@@ -205,6 +274,20 @@ claude mcp add -s project figma-mcp-go -- npx -y @vkhanhqui/figma-mcp-go@latest
 | `annotation_conversion_strategy` | Convert manual annotations to native Figma annotations |
 | `swap_overrides_instances` | Transfer overrides between component instances |
 | `reaction_to_connector_strategy` | Map prototype reactions into interaction flow diagrams |
+
+### Official-only capabilities not replicated locally
+
+`figma-mcp-go` does not try to fake cloud-only capabilities. Keep using the official `figma` MCP for:
+
+- `whoami`
+- `create_new_file`
+- `search_design_system`
+- `generate_figma_design`
+- `get_code_connect_map`
+- `add_code_connect_map`
+- `get_code_connect_suggestions`
+- `send_code_connect_mappings`
+- `create_design_system_rules`
 
 ---
 

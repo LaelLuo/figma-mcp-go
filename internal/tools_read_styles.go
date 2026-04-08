@@ -13,8 +13,23 @@ func registerReadStyleTools(s *server.MCPServer, node *Node) {
 	), makeHandler(node, "get_styles", nil, nil))
 
 	s.AddTool(mcp.NewTool("get_variable_defs",
-		mcp.WithDescription("Get all local variable definitions: collections, modes, and values. Variables are Figma's design token system."),
-	), makeHandler(node, "get_variable_defs", nil, nil))
+		mcp.WithDescription("Get all local variable definitions: collections, modes, and values. Accepts official-style compatibility parameters in local fallback mode."),
+		mcp.WithString("fileKey",
+			mcp.Description("Compatibility parameter for the official Figma MCP. In local fallback mode this may be ignored."),
+		),
+		mcp.WithString("nodeId",
+			mcp.Description("Optional node ID in colon format e.g. '4029:12345'."),
+		),
+		mcp.WithString("clientFrameworks",
+			mcp.Description("Optional framework context for compatibility with the official Figma MCP."),
+		),
+		mcp.WithString("clientLanguages",
+			mcp.Description("Optional language context for compatibility with the official Figma MCP."),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		resp, err := node.Send(ctx, "get_variable_defs", nil, collectArgs(req, "fileKey", "nodeId", "clientFrameworks", "clientLanguages"))
+		return renderResponse(resp, err)
+	})
 
 	s.AddTool(mcp.NewTool("get_local_components",
 		mcp.WithDescription("Get all components defined in the current Figma file."),

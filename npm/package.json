@@ -1,7 +1,7 @@
 {
   "name": "@vkhanhqui/figma-mcp-go",
   "version": "0.0.1-alpha",
-  "description": "A zero-cost, unlimited Figma MCP server — no API key, no rate limits",
+  "description": "Local fallback MCP for the official Figma MCP with desktop/plugin read-write access",
   "mcpName": "io.github.vkhanhqui/figma-mcp-go",
   "bin": {
     "figma-mcp-go": "bin/run.js"

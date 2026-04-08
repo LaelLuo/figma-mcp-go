@@ -32,6 +32,17 @@ func ValidNodeID(s string) bool {
 // input shape. Returns an error string on failure, empty string if valid.
 func ValidateRPC(tool string, nodeIDs []string, params map[string]interface{}) string {
 	switch tool {
+	case "use_figma":
+		code, _ := params["code"].(string)
+		if strings.TrimSpace(code) == "" {
+			return "code is required"
+		}
+
+	case "get_metadata":
+		if msg := validateOptionalOfficialNodeID(params); msg != "" {
+			return msg
+		}
+
 	case "get_node":
 		if len(nodeIDs) == 0 || nodeIDs[0] == "" {
 			return "nodeId is required"
@@ -97,6 +108,9 @@ func ValidateRPC(tool string, nodeIDs []string, params map[string]interface{}) s
 		}
 
 	case "get_design_context":
+		if msg := validateOptionalOfficialNodeID(params); msg != "" {
+			return msg
+		}
 		if depth, ok := params["depth"].(float64); ok {
 			if depth < 0 {
 				return "depth must be a non-negative number"
@@ -108,6 +122,24 @@ func ValidateRPC(tool string, nodeIDs []string, params map[string]interface{}) s
 			default:
 				return fmt.Sprintf("detail must be minimal, compact, or full, got: %s", detail)
 			}
+		}
+		for _, key := range []string{"disableCodeConnect", "excludeScreenshot", "forceCode"} {
+			if msg := validateOptionalBool(params, key); msg != "" {
+				return msg
+			}
+		}
+
+	case "get_figjam":
+		if msg := validateOptionalOfficialNodeID(params); msg != "" {
+			return msg
+		}
+		if msg := validateOptionalBool(params, "includeImagesOfNodes"); msg != "" {
+			return msg
+		}
+
+	case "get_variable_defs":
+		if msg := validateOptionalOfficialNodeID(params); msg != "" {
+			return msg
 		}
 
 	case "search_nodes":
@@ -650,6 +682,28 @@ func validateReaction(idx int, r map[string]any) string {
 		if msg := validateActionType(idx, action); msg != "" {
 			return msg
 		}
+	}
+	return ""
+}
+
+func validateOptionalOfficialNodeID(params map[string]interface{}) string {
+	if nodeID, ok := params["nodeId"].(string); ok && nodeID != "" {
+		if !ValidNodeID(nodeID) {
+			return fmt.Sprintf("nodeId must use colon format e.g. 4029:12345, got: %s", nodeID)
+		}
+	}
+	return ""
+}
+
+func validateOptionalBool(params map[string]interface{}, key string) string {
+	if params == nil {
+		return ""
+	}
+	if _, ok := params[key]; !ok {
+		return ""
+	}
+	if _, ok := params[key].(bool); !ok {
+		return fmt.Sprintf("%s must be a boolean", key)
 	}
 	return ""
 }

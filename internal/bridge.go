@@ -163,11 +163,7 @@ func (b *Bridge) Send(ctx context.Context, requestType string, nodeIDs []string,
 
 	// Register before sending to avoid a race where the response
 	// arrives before we store the channel.
-	// get_document on large files can take longer; give it more headroom.
-	timeout := 30 * time.Second
-	if requestType == "get_document" {
-		timeout = 60 * time.Second
-	}
+	timeout := timeoutForRequest(requestType)
 	entry.timer = time.AfterFunc(timeout, func() {
 		bridgeLogger.Printf("→ %s %s timed out after %s", requestID, requestType, timeout)
 		b.mu.Lock()
@@ -210,6 +206,15 @@ func (b *Bridge) Send(ctx context.Context, requestType string, nodeIDs []string,
 		b.mu.Unlock()
 		bridgeLogger.Printf("→ %s %s context cancelled: %v", requestID, requestType, ctx.Err())
 		return BridgeResponse{}, ctx.Err()
+	}
+}
+
+func timeoutForRequest(requestType string) time.Duration {
+	switch requestType {
+	case "get_document", "get_design_context", "get_figjam", "use_figma":
+		return 90 * time.Second
+	default:
+		return 30 * time.Second
 	}
 }
 

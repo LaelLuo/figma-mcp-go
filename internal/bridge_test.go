@@ -227,6 +227,24 @@ func TestBridgeSend_Timeout(t *testing.T) {
 	}
 }
 
+func TestTimeoutForRequest(t *testing.T) {
+	if got := timeoutForRequest("get_document"); got != 90*time.Second {
+		t.Fatalf("get_document timeout = %s, want 90s", got)
+	}
+	if got := timeoutForRequest("get_design_context"); got != 90*time.Second {
+		t.Fatalf("get_design_context timeout = %s, want 90s", got)
+	}
+	if got := timeoutForRequest("get_figjam"); got != 90*time.Second {
+		t.Fatalf("get_figjam timeout = %s, want 90s", got)
+	}
+	if got := timeoutForRequest("use_figma"); got != 90*time.Second {
+		t.Fatalf("use_figma timeout = %s, want 90s", got)
+	}
+	if got := timeoutForRequest("get_node"); got != 30*time.Second {
+		t.Fatalf("get_node timeout = %s, want 30s", got)
+	}
+}
+
 // ── IsConnected ───────────────────────────────────────────────────────────────
 
 func TestBridgeIsConnected(t *testing.T) {

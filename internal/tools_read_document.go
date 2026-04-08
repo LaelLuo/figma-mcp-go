@@ -17,8 +17,23 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 	), makeHandler(node, "get_pages", nil, nil))
 
 	s.AddTool(mcp.NewTool("get_metadata",
-		mcp.WithDescription("Get metadata about the current Figma document: file name, pages, current page"),
-	), makeHandler(node, "get_metadata", nil, nil))
+		mcp.WithDescription("Get metadata for a node or page in the current Figma desktop file. Local fallback output is lighter than the official cloud response but uses official-style parameters."),
+		mcp.WithString("fileKey",
+			mcp.Description("Compatibility parameter for the official Figma MCP. In local fallback mode this may be ignored."),
+		),
+		mcp.WithString("nodeId",
+			mcp.Description("Optional node ID in colon format e.g. '4029:12345'. Defaults to the current page when omitted."),
+		),
+		mcp.WithString("clientFrameworks",
+			mcp.Description("Optional framework context for compatibility with the official Figma MCP."),
+		),
+		mcp.WithString("clientLanguages",
+			mcp.Description("Optional language context for compatibility with the official Figma MCP."),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		resp, err := node.Send(ctx, "get_metadata", nil, collectArgs(req, "fileKey", "nodeId", "clientFrameworks", "clientLanguages"))
+		return renderResponse(resp, err)
+	})
 
 	s.AddTool(mcp.NewTool("get_selection",
 		mcp.WithDescription("Get the currently selected nodes in Figma"),
@@ -51,7 +66,28 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 	})
 
 	s.AddTool(mcp.NewTool("get_design_context",
-		mcp.WithDescription("Get a depth-limited tree of the current selection or page. More token-efficient than get_document for large files."),
+		mcp.WithDescription("Get design context for a Figma node. Local fallback accepts official-style parameters and also preserves legacy local options like depth/detail."),
+		mcp.WithString("fileKey",
+			mcp.Description("Compatibility parameter for the official Figma MCP. In local fallback mode this may be ignored."),
+		),
+		mcp.WithString("nodeId",
+			mcp.Description("Optional node ID in colon format e.g. '4029:12345'."),
+		),
+		mcp.WithString("clientFrameworks",
+			mcp.Description("Optional framework context for compatibility with the official Figma MCP."),
+		),
+		mcp.WithString("clientLanguages",
+			mcp.Description("Optional language context for compatibility with the official Figma MCP."),
+		),
+		mcp.WithBoolean("disableCodeConnect",
+			mcp.Description("Accepted for official compatibility. Local fallback may treat this as a no-op."),
+		),
+		mcp.WithBoolean("excludeScreenshot",
+			mcp.Description("When true, omit screenshots from the response where supported."),
+		),
+		mcp.WithBoolean("forceCode",
+			mcp.Description("Accepted for official compatibility."),
+		),
 		mcp.WithNumber("depth",
 			mcp.Description("How many levels deep to traverse (default 2)"),
 		),
@@ -62,7 +98,15 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 			mcp.Description("When true, INSTANCE nodes are serialized compactly (mainComponentId + componentProperties + overrides array of differing text/nested content) and unique component definitions are collected once in a top-level componentDefs map. Highly token-efficient for screens with many repeated component instances."),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		params := map[string]interface{}{}
+		params := collectArgs(req,
+			"fileKey",
+			"nodeId",
+			"clientFrameworks",
+			"clientLanguages",
+			"disableCodeConnect",
+			"excludeScreenshot",
+			"forceCode",
+		)
 		if d, ok := req.GetArguments()["depth"].(float64); ok && d > 0 {
 			params["depth"] = d
 		}
@@ -73,6 +117,22 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 			params["dedupeComponents"] = true
 		}
 		resp, err := node.Send(ctx, "get_design_context", nil, params)
+		return renderResponse(resp, err)
+	})
+
+	s.AddTool(mcp.NewTool("get_figjam",
+		mcp.WithDescription("Generate UI code for a FigJam node in the current desktop file. This is the local fallback counterpart to the official Figma MCP get_figjam tool."),
+		mcp.WithString("fileKey",
+			mcp.Description("Compatibility parameter for the official Figma MCP. In local fallback mode this may be ignored."),
+		),
+		mcp.WithString("nodeId",
+			mcp.Description("Optional node ID in colon format e.g. '4029:12345'. Defaults to the root node when omitted."),
+		),
+		mcp.WithBoolean("includeImagesOfNodes",
+			mcp.Description("When true, include images of nodes in the response where supported."),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		resp, err := node.Send(ctx, "get_figjam", nil, collectArgs(req, "fileKey", "nodeId", "includeImagesOfNodes"))
 		return renderResponse(resp, err)
 	})
 
@@ -161,4 +221,14 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 	s.AddTool(mcp.NewTool("get_fonts",
 		mcp.WithDescription("List all fonts used in the current page, sorted by usage frequency. Useful for understanding typography without scanning all text nodes."),
 	), makeHandler(node, "get_fonts", nil, nil))
+}
+
+func collectArgs(req mcp.CallToolRequest, keys ...string) map[string]interface{} {
+	params := map[string]interface{}{}
+	for _, key := range keys {
+		if value, ok := req.GetArguments()[key]; ok {
+			params[key] = value
+		}
+	}
+	return params
 }
