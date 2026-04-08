@@ -1,6 +1,7 @@
 // Plugin core — entry point, UI bootstrap, and request dispatch.
 
 import { handleReadRequest } from "./read-handlers";
+import { handleUseFigmaRequest } from "./use-figma";
 import { handleWriteRequest } from "./write-handlers";
 
 const sendStatus = () => {
@@ -17,6 +18,7 @@ const sendStatus = () => {
 const handleRequest = async (request: any) => {
   try {
     const result =
+      (await handleUseFigmaRequest(request)) ??
       (await handleReadRequest(request)) ??
       (await handleWriteRequest(request));
     if (result === null)
