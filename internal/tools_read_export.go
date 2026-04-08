@@ -19,7 +19,7 @@ import (
 
 func registerReadExportTools(s *server.MCPServer, node *Node) {
 	s.AddTool(mcp.NewTool("get_screenshot",
-		mcp.WithDescription("Export a screenshot of selected or specific nodes. Returns base64-encoded image data."),
+		mcp.WithDescription("Export a screenshot of selected or specific nodes. Returns image content plus structured metadata."),
 		mcp.WithArray("nodeIds",
 			mcp.Description("Optional node IDs to export, colon format. If empty, exports current selection."),
 			mcp.WithStringItems(),
@@ -41,7 +41,7 @@ func registerReadExportTools(s *server.MCPServer, node *Node) {
 			params["scale"] = s
 		}
 		resp, err := node.Send(ctx, "get_screenshot", nodeIDs, params)
-		return renderResponse(resp, err)
+		return renderScreenshotResponse(resp, err)
 	})
 
 	s.AddTool(mcp.NewTool("export_frames_to_pdf",
@@ -74,7 +74,7 @@ func registerReadExportTools(s *server.MCPServer, node *Node) {
 				"type": "object",
 				"properties": map[string]any{
 					"nodeId":     map[string]any{"type": "string", "description": "Node ID in colon format e.g. '4029:12345'"},
-					"outputPath": map[string]any{"type": "string", "description": "File path to write the image to"},
+					"outputPath": map[string]any{"type": "string", "description": "File path to write the image to. Relative paths stay inside the working directory; absolute paths are allowed."},
 					"format":     map[string]any{"type": "string", "description": "Export format: PNG, SVG, JPG, or PDF"},
 					"scale":      map[string]any{"type": "number", "description": "Export scale for raster formats"},
 				},

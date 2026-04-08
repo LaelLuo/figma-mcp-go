@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // ── renderResponse ────────────────────────────────────────────────────────────
@@ -50,6 +52,76 @@ func TestRenderResponse_NilData(t *testing.T) {
 	}
 	if result.IsError {
 		t.Error("expected IsError=false for nil data")
+	}
+}
+
+func TestRenderScreenshotResponse_SuccessIncludesImageContent(t *testing.T) {
+	first := base64.StdEncoding.EncodeToString([]byte("first-image"))
+	second := base64.StdEncoding.EncodeToString([]byte("second-image"))
+
+	result, err := renderScreenshotResponse(BridgeResponse{
+		Data: map[string]any{
+			"exports": []any{
+				map[string]any{
+					"nodeId":   "1:1",
+					"nodeName": "Frame 1",
+					"format":   "PNG",
+					"base64":   first,
+					"width":    float64(100),
+					"height":   float64(80),
+				},
+				map[string]any{
+					"nodeId":   "1:2",
+					"nodeName": "Frame 2",
+					"format":   "PNG",
+					"base64":   second,
+					"width":    float64(120),
+					"height":   float64(90),
+				},
+			},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("expected successful screenshot response")
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("expected structured content for screenshot metadata")
+	}
+	if len(result.Content) != 3 {
+		t.Fatalf("expected 3 content blocks, got %d", len(result.Content))
+	}
+
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected first content block to be text, got %T", result.Content[0])
+	}
+	if text.Text == "" {
+		t.Fatal("expected non-empty text summary")
+	}
+
+	image1, ok := result.Content[1].(mcp.ImageContent)
+	if !ok {
+		t.Fatalf("expected second content block to be image, got %T", result.Content[1])
+	}
+	if image1.Data != first {
+		t.Fatalf("unexpected first image payload")
+	}
+	if image1.MIMEType != "image/png" {
+		t.Fatalf("unexpected first image MIME type: %s", image1.MIMEType)
+	}
+
+	image2, ok := result.Content[2].(mcp.ImageContent)
+	if !ok {
+		t.Fatalf("expected third content block to be image, got %T", result.Content[2])
+	}
+	if image2.Data != second {
+		t.Fatalf("unexpected second image payload")
+	}
+	if image2.MIMEType != "image/png" {
+		t.Fatalf("unexpected second image MIME type: %s", image2.MIMEType)
 	}
 }
 
@@ -149,9 +221,13 @@ func TestResolveOutputPath_Traversal_Blocked(t *testing.T) {
 
 func TestResolveOutputPath_AbsoluteOutsideDir_Blocked(t *testing.T) {
 	dir := t.TempDir()
-	_, err := resolveOutputPath("/etc/passwd", dir)
-	if err == nil {
-		t.Error("expected error for absolute path outside working dir")
+	outside := filepath.Join(filepath.Dir(dir), "outside.png")
+	got, err := resolveOutputPath(outside, dir)
+	if err != nil {
+		t.Fatalf("unexpected error for absolute output path: %v", err)
+	}
+	if got != outside {
+		t.Errorf("got %s, want %s", got, outside)
 	}
 }
 

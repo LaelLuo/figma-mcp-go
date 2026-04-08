@@ -188,10 +188,12 @@ claude mcp add -s project figma-mcp-go -- npx -y @vkhanhqui/figma-mcp-go@latest
 
 | Tool | Description |
 |------|-------------|
-| `get_screenshot` | Base64 image export of any node |
+| `get_screenshot` | Returns MCP image content plus structured metadata for exported nodes |
 | `save_screenshots` | Export images to disk (server-side, no API call) |
 | `export_frames_to_pdf` | Export multiple frames as a single multi-page PDF file saved to disk |
 | `export_tokens` | Export design tokens (variables + paint styles) as JSON or CSS |
+
+`save_screenshots` and `export_frames_to_pdf` accept relative paths inside the current working directory, or explicit absolute paths when you want to write elsewhere on disk.
 
 ### MCP Prompts
 

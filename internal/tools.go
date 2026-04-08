@@ -51,6 +51,38 @@ func renderResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, error)
 	return mcp.NewToolResultText(string(text)), nil
 }
 
+func renderScreenshotResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, error) {
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if resp.Error != "" {
+		return mcp.NewToolResultError(resp.Error), nil
+	}
+
+	exports, err := extractScreenshotExports(resp.Data)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("parse screenshot response: %v", err)), nil
+	}
+
+	content := make([]mcp.Content, 0, len(exports)+1)
+	content = append(content, mcp.TextContent{
+		Type: mcp.ContentTypeText,
+		Text: screenshotSummary(exports),
+	})
+	for _, export := range exports {
+		content = append(content, mcp.ImageContent{
+			Type:     mcp.ContentTypeImage,
+			Data:     export.Base64,
+			MIMEType: screenshotMIMEType(export.Format),
+		})
+	}
+
+	return &mcp.CallToolResult{
+		Content:           content,
+		StructuredContent: resp.Data,
+	}, nil
+}
+
 // toStringSlice converts []interface{} to []string.
 func toStringSlice(raw []interface{}) []string {
 	out := make([]string, 0, len(raw))
@@ -190,26 +222,35 @@ func saveScreenshotItem(ctx context.Context, node *Node, item saveItem, index in
 type screenshotExport struct {
 	NodeID   string  `json:"nodeId"`
 	NodeName string  `json:"nodeName"`
+	Format   string  `json:"format"`
 	Base64   string  `json:"base64"`
 	Width    float64 `json:"width"`
 	Height   float64 `json:"height"`
 }
 
 func extractScreenshotExport(data interface{}) (screenshotExport, error) {
-	b, err := json.Marshal(data)
+	exports, err := extractScreenshotExports(data)
 	if err != nil {
 		return screenshotExport{}, err
+	}
+	return exports[0], nil
+}
+
+func extractScreenshotExports(data interface{}) ([]screenshotExport, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
 	}
 	var wrapper struct {
 		Exports []screenshotExport `json:"exports"`
 	}
 	if err := json.Unmarshal(b, &wrapper); err != nil {
-		return screenshotExport{}, err
+		return nil, err
 	}
 	if len(wrapper.Exports) == 0 {
-		return screenshotExport{}, errors.New("no screenshot export returned by plugin")
+		return nil, errors.New("no screenshot export returned by plugin")
 	}
-	return wrapper.Exports[0], nil
+	return wrapper.Exports, nil
 }
 
 func writeBase64(b64, outputPath string) (int, error) {
@@ -234,7 +275,7 @@ func writeBase64(b64, outputPath string) (int, error) {
 
 func resolveOutputPath(outputPath, workDir string) (string, error) {
 	if filepath.IsAbs(outputPath) {
-		return mustBeInsideDir(filepath.Clean(outputPath), workDir)
+		return filepath.Clean(outputPath), nil
 	}
 	return mustBeInsideDir(filepath.Join(workDir, outputPath), workDir)
 }
@@ -283,4 +324,36 @@ func coalesce(a, b string) string {
 		return a
 	}
 	return b
+}
+
+func screenshotSummary(exports []screenshotExport) string {
+	if len(exports) == 1 {
+		return fmt.Sprintf("Exported screenshot for %s.", screenshotLabel(exports[0]))
+	}
+	return fmt.Sprintf("Exported %d screenshots.", len(exports))
+}
+
+func screenshotLabel(export screenshotExport) string {
+	if export.NodeName != "" {
+		return export.NodeName
+	}
+	if export.NodeID != "" {
+		return export.NodeID
+	}
+	return "selection"
+}
+
+func screenshotMIMEType(format string) string {
+	switch strings.ToUpper(format) {
+	case "PNG", "":
+		return "image/png"
+	case "JPG", "JPEG":
+		return "image/jpeg"
+	case "SVG":
+		return "image/svg+xml"
+	case "PDF":
+		return "application/pdf"
+	default:
+		return "application/octet-stream"
+	}
 }
