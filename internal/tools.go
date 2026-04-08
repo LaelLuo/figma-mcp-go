@@ -80,7 +80,7 @@ func renderScreenshotResponse(resp BridgeResponse, err error) (*mcp.CallToolResu
 
 	return &mcp.CallToolResult{
 		Content:           content,
-		StructuredContent: resp.Data,
+		StructuredContent: sanitizeStructuredContentForImages(resp.Data),
 	}, nil
 }
 
@@ -90,22 +90,13 @@ func renderMetadataResponse(resp BridgeResponse, err error) (*mcp.CallToolResult
 			return metadataText
 		}
 		return ""
-	})
+	}, sanitizeStructuredContentForMetadata)
 }
 
 func renderVariableDefsResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, error) {
 	return renderStructuredTextResponse(resp, err, func(data map[string]interface{}) string {
-		message, _ := data["message"].(string)
-		scope, _ := data["scope"].(string)
-		source, _ := data["source"].(string)
-		if message != "" {
-			if scope != "" && source != "" {
-				return fmt.Sprintf("%s\n\nsource=%s\nscope=%s", message, source, scope)
-			}
-			return message
-		}
-		return ""
-	})
+		return stringFromMap(data, "message")
+	}, sanitizeStructuredContentForVariableDefs)
 }
 
 func renderDesignContextResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, error) {
@@ -144,7 +135,7 @@ func renderDesignContextResponse(resp BridgeResponse, err error) (*mcp.CallToolR
 
 	return &mcp.CallToolResult{
 		Content:           content,
-		StructuredContent: resp.Data,
+		StructuredContent: sanitizeStructuredContentForDesignContext(resp.Data),
 	}, nil
 }
 
@@ -164,11 +155,7 @@ func renderFigJamResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, 
 	content := []mcp.Content{
 		mcp.TextContent{
 			Type: mcp.ContentTypeText,
-			Text: firstNonEmptyString(
-				stringFromMap(data, "metadataText"),
-				stringFromMap(data, "message"),
-				mustJSON(data),
-			),
+			Text: buildFigJamText(data),
 		},
 	}
 
@@ -196,11 +183,16 @@ func renderFigJamResponse(resp BridgeResponse, err error) (*mcp.CallToolResult, 
 
 	return &mcp.CallToolResult{
 		Content:           content,
-		StructuredContent: resp.Data,
+		StructuredContent: sanitizeStructuredContentForFigJam(resp.Data),
 	}, nil
 }
 
-func renderStructuredTextResponse(resp BridgeResponse, err error, textBuilder func(map[string]interface{}) string) (*mcp.CallToolResult, error) {
+func renderStructuredTextResponse(
+	resp BridgeResponse,
+	err error,
+	textBuilder func(map[string]interface{}) string,
+	sanitizer func(interface{}) interface{},
+) (*mcp.CallToolResult, error) {
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -215,7 +207,12 @@ func renderStructuredTextResponse(resp BridgeResponse, err error, textBuilder fu
 
 	text := textBuilder(data)
 	if strings.TrimSpace(text) == "" {
-		text = mustJSON(data)
+		text = buildStructuredTextFallback(data)
+	}
+
+	structuredContent := resp.Data
+	if sanitizer != nil {
+		structuredContent = sanitizer(resp.Data)
 	}
 
 	return &mcp.CallToolResult{
@@ -225,7 +222,7 @@ func renderStructuredTextResponse(resp BridgeResponse, err error, textBuilder fu
 				Text: text,
 			},
 		},
-		StructuredContent: resp.Data,
+		StructuredContent: structuredContent,
 	}, nil
 }
 
@@ -241,8 +238,97 @@ func asStringMap(data interface{}) (map[string]interface{}, error) {
 	return result, nil
 }
 
+func sanitizeStructuredContent(data interface{}, mutators ...func(map[string]interface{})) interface{} {
+	structured, err := asStringMap(data)
+	if err != nil {
+		return data
+	}
+	for _, mutator := range mutators {
+		if mutator != nil {
+			mutator(structured)
+		}
+	}
+	return structured
+}
+
+func sanitizeStructuredContentForImages(data interface{}) interface{} {
+	return sanitizeStructuredContent(data, func(structured map[string]interface{}) {
+		sanitizeNestedImageMap(structured, "screenshot")
+		sanitizeNestedImageSlice(structured, "images")
+		sanitizeNestedImageSlice(structured, "exports")
+	})
+}
+
+func sanitizeStructuredContentForDesignContext(data interface{}) interface{} {
+	return sanitizeStructuredContent(data,
+		func(structured map[string]interface{}) {
+			sanitizeNestedImageMap(structured, "screenshot")
+			sanitizeNestedImageSlice(structured, "images")
+			sanitizeNestedImageSlice(structured, "exports")
+		},
+		func(structured map[string]interface{}) {
+			removeTopLevelKeys(structured, "code")
+		},
+	)
+}
+
+func sanitizeStructuredContentForFigJam(data interface{}) interface{} {
+	return sanitizeStructuredContent(data,
+		func(structured map[string]interface{}) {
+			sanitizeNestedImageSlice(structured, "images")
+		},
+		func(structured map[string]interface{}) {
+			removeTopLevelKeys(structured, "metadataText", "tree")
+		},
+	)
+}
+
+func sanitizeStructuredContentForMetadata(data interface{}) interface{} {
+	return sanitizeStructuredContent(data, func(structured map[string]interface{}) {
+		removeTopLevelKeys(structured, "metadataText")
+	})
+}
+
+func sanitizeStructuredContentForVariableDefs(data interface{}) interface{} {
+	return sanitizeStructuredContent(data, func(structured map[string]interface{}) {
+		removeTopLevelKeys(structured, "message")
+	})
+}
+
+func sanitizeNestedImageMap(data map[string]interface{}, key string) {
+	image, ok := data[key].(map[string]interface{})
+	if !ok {
+		return
+	}
+	delete(image, "base64")
+}
+
+func sanitizeNestedImageSlice(data map[string]interface{}, key string) {
+	rawItems, ok := data[key].([]interface{})
+	if !ok {
+		return
+	}
+	for _, rawItem := range rawItems {
+		item, ok := rawItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		delete(item, "base64")
+	}
+}
+
+func removeTopLevelKeys(data map[string]interface{}, keys ...string) {
+	for _, key := range keys {
+		delete(data, key)
+	}
+}
+
 func buildDesignContextText(data map[string]interface{}) string {
 	code := stringFromMap(data, "code")
+	if strings.TrimSpace(code) != "" {
+		return code
+	}
+
 	metadata := extractNestedMap(data, "metadata")
 	message := stringFromMap(metadata, "message")
 	name := stringFromMap(data, "name")
@@ -259,6 +345,39 @@ func buildDesignContextText(data map[string]interface{}) string {
 		parts = append(parts, code)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+func buildFigJamText(data map[string]interface{}) string {
+	return firstNonEmptyString(
+		stringFromMap(data, "metadataText"),
+		stringFromMap(data, "message"),
+		buildStructuredTextFallback(data),
+	)
+}
+
+func buildStructuredTextFallback(data map[string]interface{}) string {
+	name := stringFromMap(data, "name")
+	nodeID := stringFromMap(data, "nodeId")
+	kind := stringFromMap(data, "kind")
+	source := stringFromMap(data, "source")
+	scope := stringFromMap(data, "scope")
+
+	parts := make([]string, 0, 3)
+	if name != "" || nodeID != "" {
+		parts = append(parts, strings.TrimSpace(fmt.Sprintf("Response for %s (%s).", name, nodeID)))
+	} else if kind != "" {
+		parts = append(parts, fmt.Sprintf("Response kind: %s.", kind))
+	}
+	if source != "" {
+		parts = append(parts, fmt.Sprintf("source=%s", source))
+	}
+	if scope != "" {
+		parts = append(parts, fmt.Sprintf("scope=%s", scope))
+	}
+	if len(parts) == 0 {
+		return "Response available in structuredContent."
+	}
+	return strings.Join(parts, "\n")
 }
 
 func extractNestedMap(data map[string]interface{}, key string) map[string]interface{} {

@@ -123,6 +123,24 @@ func TestRenderScreenshotResponse_SuccessIncludesImageContent(t *testing.T) {
 	if image2.MIMEType != "image/png" {
 		t.Fatalf("unexpected second image MIME type: %s", image2.MIMEType)
 	}
+
+	structured, err := asStringMap(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("structured content should be a JSON object: %v", err)
+	}
+	exports, ok := structured["exports"].([]interface{})
+	if !ok || len(exports) != 2 {
+		t.Fatalf("expected 2 structured exports, got %#v", structured["exports"])
+	}
+	for i, rawExport := range exports {
+		export, ok := rawExport.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected export %d to be an object, got %T", i, rawExport)
+		}
+		if _, exists := export["base64"]; exists {
+			t.Fatalf("expected structured export %d to omit base64", i)
+		}
+	}
 }
 
 func TestRenderMetadataResponse_ReturnsTextEnvelope(t *testing.T) {
@@ -152,6 +170,14 @@ func TestRenderMetadataResponse_ReturnsTextEnvelope(t *testing.T) {
 	}
 	if text.Text != "<metadata source=\"figma-mcp-go\" />" {
 		t.Fatalf("unexpected metadata text: %q", text.Text)
+	}
+
+	structured, err := asStringMap(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("structured content should be a JSON object: %v", err)
+	}
+	if _, exists := structured["metadataText"]; exists {
+		t.Fatal("expected structured metadata response to omit metadataText")
 	}
 }
 
@@ -191,8 +217,8 @@ func TestRenderDesignContextResponse_IncludesStructuredContentAndOptionalImage(t
 	if !ok {
 		t.Fatalf("expected first content block to be text, got %T", result.Content[0])
 	}
-	if text.Text == "" {
-		t.Fatal("expected non-empty design context text")
+	if text.Text != "{\n  \"notice\": \"fallback\"\n}" {
+		t.Fatalf("expected content text to include only code payload, got %q", text.Text)
 	}
 
 	renderedImage, ok := result.Content[1].(mcp.ImageContent)
@@ -204,6 +230,99 @@ func TestRenderDesignContextResponse_IncludesStructuredContentAndOptionalImage(t
 	}
 	if renderedImage.MIMEType != "image/png" {
 		t.Fatalf("unexpected image MIME type: %s", renderedImage.MIMEType)
+	}
+
+	structured, err := asStringMap(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("structured content should be a JSON object: %v", err)
+	}
+	screenshot, ok := structured["screenshot"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected screenshot metadata object, got %T", structured["screenshot"])
+	}
+	if _, exists := screenshot["base64"]; exists {
+		t.Fatal("expected structured screenshot metadata to omit base64")
+	}
+	if screenshot["mimeType"] != "image/png" {
+		t.Fatalf("expected mimeType to be preserved, got %#v", screenshot["mimeType"])
+	}
+	if _, exists := structured["code"]; exists {
+		t.Fatal("expected structured design context to omit code")
+	}
+}
+
+func TestRenderFigJamResponse_IncludesImageContentWithoutDuplicatingBase64InStructuredContent(t *testing.T) {
+	image := base64.StdEncoding.EncodeToString([]byte("figjam-image"))
+
+	result, err := renderFigJamResponse(BridgeResponse{
+		Data: map[string]any{
+			"metadataText": "<figjam source=\"figma-mcp-go\" />",
+			"images": []any{
+				map[string]any{
+					"nodeId":   "2:1",
+					"mimeType": "image/png",
+					"base64":   image,
+					"width":    float64(320),
+					"height":   float64(200),
+				},
+			},
+			"context": []any{
+				map[string]any{"id": "2:1", "name": "Sticky"},
+			},
+			"tree": []any{
+				map[string]any{"id": "2:1", "name": "Sticky"},
+			},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("expected successful figjam response")
+	}
+	if len(result.Content) != 2 {
+		t.Fatalf("expected 2 content blocks, got %d", len(result.Content))
+	}
+
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected first content block to be text, got %T", result.Content[0])
+	}
+	if text.Text != "<figjam source=\"figma-mcp-go\" />" {
+		t.Fatalf("expected metadataText in content, got %q", text.Text)
+	}
+
+	renderedImage, ok := result.Content[1].(mcp.ImageContent)
+	if !ok {
+		t.Fatalf("expected second content block to be image, got %T", result.Content[1])
+	}
+	if renderedImage.Data != image {
+		t.Fatal("expected image content to keep base64 payload")
+	}
+
+	structured, err := asStringMap(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("structured content should be a JSON object: %v", err)
+	}
+	images, ok := structured["images"].([]interface{})
+	if !ok || len(images) != 1 {
+		t.Fatalf("expected 1 structured image, got %#v", structured["images"])
+	}
+	imageMeta, ok := images[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected structured image metadata object, got %T", images[0])
+	}
+	if _, exists := imageMeta["base64"]; exists {
+		t.Fatal("expected structured figjam image metadata to omit base64")
+	}
+	if imageMeta["mimeType"] != "image/png" {
+		t.Fatalf("expected mimeType to be preserved, got %#v", imageMeta["mimeType"])
+	}
+	if _, exists := structured["metadataText"]; exists {
+		t.Fatal("expected structured figjam response to omit metadataText")
+	}
+	if _, exists := structured["tree"]; exists {
+		t.Fatal("expected structured figjam response to omit duplicate tree payload")
 	}
 }
 
@@ -235,8 +354,16 @@ func TestRenderVariableDefsResponse_PreservesStructuredContent(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected text content, got %T", result.Content[0])
 	}
-	if text.Text == "" {
-		t.Fatal("expected non-empty variable defs text")
+	if text.Text != "Local fallback exposes variables defined in this file." {
+		t.Fatalf("expected message-only variable defs text, got %q", text.Text)
+	}
+
+	structured, err := asStringMap(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("structured content should be a JSON object: %v", err)
+	}
+	if _, exists := structured["message"]; exists {
+		t.Fatal("expected structured variable defs response to omit message")
 	}
 }
 
