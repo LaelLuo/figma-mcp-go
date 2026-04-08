@@ -35,8 +35,10 @@ You will receive JSON data from get_reactions. Each node may contain reactions l
 ## Step-by-Step Process
 
 ### 1. Gather Context
-- Call get_nodes_info(nodeIds: [...]) on all relevant nodes to get their names and types
-- Call get_design_context(depth: 2, detail: "minimal") to understand the page structure
+- Call get_metadata first to understand which file, page, or selection you are analyzing.
+- Call get_nodes_info(nodeIds: [...]) on all relevant nodes to get their names and types.
+- Call get_design_context(depth: 2, detail: "minimal") to understand the page structure.
+- If the workflow depends on cloud-only prototype metadata, prefer the official Figma MCP. Otherwise, figma-mcp-go fallback is acceptable for local reaction analysis.
 
 ### 2. Filter and Transform Reactions
 - Iterate through the get_reactions JSON output
@@ -68,11 +70,13 @@ Flow Map:
 ### 5. Verification
 - Use get_screenshot(nodeIds: [...]) on key screens to visually confirm the flow
 - Cross-check node names from get_nodes_info with the flow map
+- If the file is a FigJam board rather than a design file, use get_figjam for context instead of assuming normal screen/frame structure.
 
 ## Notes
 - Node IDs use colon format: 4029:12345 — never use hyphens
 - Use get_reactions on a set of nodes that represent screens or interactive frames
-- Focus on NAVIGATE actions for the primary user journey`),
+- Focus on NAVIGATE actions for the primary user journey
+- In fallback mode, get_design_context may return an honest degraded summary for large nodes; narrow the scope with get_metadata plus targeted node reads when needed`),
 				),
 			},
 		), nil

@@ -21,11 +21,15 @@ func addStyleAuditStrategy(s *server.MCPServer) {
 Find all nodes that use raw (unlinked) fill colors, text styles, or effect styles instead of the
 design system's named styles or variables. Report findings and optionally fix them.
 
+Use the official Figma MCP when the audit depends on remote libraries or design-system search.
+Use figma-mcp-go fallback when auditing the current local file.
+
 ## Steps
 
 1. **Collect the design system**
    - Call get_styles() to list all local paint, text, effect, and grid styles (note their names and IDs).
    - Call get_variable_defs() to list all local COLOR variables (note their names and IDs).
+   - In fallback mode, treat get_variable_defs as local-file visibility only.
 
 2. **Scan the design**
    - Call get_design_context() with detail="compact" to get the full node tree.
@@ -43,6 +47,10 @@ design system's named styles or variables. Report findings and optionally fix th
    Present a table:
    | Node ID | Node Name | Issue | Raw Value | Matching Style |
    |---------|-----------|-------|-----------|----------------|
+
+   Also note whether each finding was audited against:
+   - local fallback styles/variables only, or
+   - official Figma MCP remote/library context.
 
 5. **Fix (optional, ask user first)**
    For each node with a matching style, call:

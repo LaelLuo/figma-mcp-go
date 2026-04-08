@@ -18,6 +18,8 @@ func addDesignTokenGenerationStrategy(s *server.MCPServer) {
 					mcp.RoleUser,
 					mcp.NewTextContent(`# Design Token Generation Strategy
 
+Use the official Figma MCP when you need remote design-system discovery. Use figma-mcp-go fallback when you need to extract raw values from the current local file and build a structured token system from what is already in that file.
+
 Scan an existing design to discover all unique colors, font sizes, spacing values, and radii,
 then create a structured variable collection and named styles, and finally link nodes to them.
 
@@ -27,6 +29,8 @@ then create a structured variable collection and named styles, and finally link 
 
 1. Call get_styles() to check what styles already exist (avoid duplicating them).
 2. Call get_variable_defs() to check existing variables.
+   - In fallback mode, these are current-file variables only.
+   - This is not the same thing as official library or search_design_system coverage.
 3. Call get_design_context(detail="compact") to scan the full node tree.
 4. Collect unique values:
    - **Colors**: all unique hex fills and stroke colors across nodes.
@@ -53,6 +57,8 @@ Map discovered values to semantic token names. Use this hierarchy:
 - Name: "Heading/H1", "Heading/H2", "Body/Regular", "Body/Small", "Label/Medium", etc.
 
 Present the full token plan to the user for approval before creating anything.
+
+If the user explicitly needs remote design-system alignment or library-backed token discovery, stop and prefer the official Figma MCP for that discovery step before using local fallback tools.
 
 ### Phase 3 — Creation
 
