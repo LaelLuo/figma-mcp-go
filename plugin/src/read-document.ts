@@ -140,6 +140,11 @@ export const handleReadDocumentRequest = async (request: any) => {
       const node = await figma.getNodeByIdAsync(nodeId);
       if (!node || node.type === "DOCUMENT")
         throw new Error(`Node not found: ${nodeId}`);
+      if (node.type === "PAGE") {
+        throw new Error(
+          "get_node does not support PAGE nodes because it serializes the whole page. Use get_metadata or get_design_context with depth=1 instead.",
+        );
+      }
       return {
         type: request.type,
         requestId: request.requestId,

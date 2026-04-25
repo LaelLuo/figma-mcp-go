@@ -8,6 +8,13 @@ const makeRequest = (type: string, params?: any) => ({
   params: params ?? {},
 });
 
+const makeNodeRequest = (nodeId: string) => ({
+  type: "get_node",
+  requestId: "req-node-1",
+  nodeIds: [nodeId],
+  params: {},
+});
+
 const toBase64 = (bytes: Uint8Array) => {
   const alphabet =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -158,5 +165,11 @@ describe("read-document fallback envelopes", () => {
     await expect(
       handleReadDocumentRequest(makeRequest("get_figjam", { nodeId: "0:1" })),
     ).rejects.toThrow("get_figjam is only available in FigJam files");
+  });
+
+  it("get_node rejects page nodes instead of serializing the whole page", async () => {
+    await expect(handleReadDocumentRequest(makeNodeRequest("0:1"))).rejects.toThrow(
+      "get_node does not support PAGE nodes",
+    );
   });
 });
