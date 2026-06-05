@@ -60,6 +60,13 @@ func ValidateRPC(tool string, nodeIDs []string, params map[string]interface{}) s
 				return fmt.Sprintf("invalid nodeId: %s — must use colon format e.g. 4029:12345", id)
 			}
 		}
+		if detail, ok := params["detail"].(string); ok && detail != "" {
+			switch detail {
+			case "shallow", "full":
+			default:
+				return fmt.Sprintf("detail must be shallow or full, got: %s", detail)
+			}
+		}
 
 	case "export_frames_to_pdf":
 		if len(nodeIDs) == 0 {

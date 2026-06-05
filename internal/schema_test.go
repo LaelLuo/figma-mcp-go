@@ -83,6 +83,12 @@ func TestValidateRPC_GetNodesInfo(t *testing.T) {
 	if msg := ValidateRPC("get_nodes_info", []string{"1:1", "2:2"}, nil); msg != "" {
 		t.Errorf("unexpected error: %s", msg)
 	}
+	if msg := ValidateRPC("get_nodes_info", []string{"1:1"}, map[string]interface{}{"detail": "full"}); msg != "" {
+		t.Errorf("unexpected error for full detail: %s", msg)
+	}
+	if msg := ValidateRPC("get_nodes_info", []string{"1:1"}, map[string]interface{}{"detail": "deep"}); msg == "" {
+		t.Error("expected error for unsupported detail value")
+	}
 }
 
 func TestValidateRPC_GetScreenshot(t *testing.T) {

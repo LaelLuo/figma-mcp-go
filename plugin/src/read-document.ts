@@ -58,6 +58,26 @@ const serializeSparseNodeLine = (node: any) => {
   return `    <node ${attrs.join(" ")} />`;
 };
 
+const serializeNodeInfo = (node: any) => {
+  const data: any = {
+    id: node.id,
+    name: node.name,
+    type: node.type,
+  };
+  const bounds = getBounds(node);
+  if (bounds) data.bounds = bounds;
+  if ("children" in node && Array.isArray(node.children)) {
+    data.childCount = node.children.length;
+  }
+  if ("visible" in node && node.visible === false) {
+    data.visible = false;
+  }
+  if ("opacity" in node && node.opacity !== 1) {
+    data.opacity = node.opacity;
+  }
+  return data;
+};
+
 const buildMetadataText = (kind: string, nodes: readonly any[]) => {
   const pages = getPageSummaries();
   return [
@@ -155,17 +175,18 @@ export const handleReadDocumentRequest = async (request: any) => {
     case "get_nodes_info": {
       if (!request.nodeIds || request.nodeIds.length === 0)
         throw new Error("nodeIds is required for get_nodes_info");
+      const detail = request.params && request.params.detail === "full" ? "full" : "shallow";
       const nodes = await Promise.all(
         request.nodeIds.map((id: string) => figma.getNodeByIdAsync(id)),
       );
+      const filteredNodes = nodes.filter((n) => n !== null && n.type !== "DOCUMENT");
       return {
         type: request.type,
         requestId: request.requestId,
-        data: await Promise.all(
-          nodes
-            .filter((n) => n !== null && n.type !== "DOCUMENT")
-            .map((n) => serializeNode(n)),
-        ),
+        data:
+          detail === "full"
+            ? await Promise.all(filteredNodes.map((n) => serializeNode(n)))
+            : filteredNodes.map((n) => serializeNodeInfo(n)),
       };
     }
 

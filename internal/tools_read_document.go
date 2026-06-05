@@ -52,16 +52,23 @@ func registerReadDocumentTools(s *server.MCPServer, node *Node) {
 	})
 
 	s.AddTool(mcp.NewTool("get_nodes_info",
-		mcp.WithDescription("Get detailed information about multiple Figma nodes by ID in a single call."),
+		mcp.WithDescription("Get lightweight information about multiple Figma nodes by ID in a single call. Use detail=full only when you explicitly need recursive payloads."),
 		mcp.WithArray("nodeIds",
 			mcp.Required(),
 			mcp.Description("List of node IDs in colon format e.g. ['4029:12345', '4029:67890']"),
 			mcp.WithStringItems(),
 		),
+		mcp.WithString("detail",
+			mcp.Description("Optional payload depth. Defaults to shallow for id/name/type/bounds summaries; use 'full' only when recursive node data is required."),
+		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, _ := req.GetArguments()["nodeIds"].([]interface{})
 		nodeIDs := toStringSlice(raw)
-		resp, err := node.Send(ctx, "get_nodes_info", nodeIDs, nil)
+		params := map[string]interface{}{}
+		if detail, ok := req.GetArguments()["detail"].(string); ok && detail != "" {
+			params["detail"] = detail
+		}
+		resp, err := node.Send(ctx, "get_nodes_info", nodeIDs, params)
 		return renderResponse(resp, err)
 	})
 

@@ -235,7 +235,7 @@ The tools below remain supported and are useful for direct local automation, but
 | `get_pages` | All pages (IDs + names) — lightweight, no tree loading |
 | `get_selection` | Currently selected nodes |
 | `get_node` | Single node by ID |
-| `get_nodes_info` | Multiple nodes by ID |
+| `get_nodes_info` | Multiple nodes by ID, shallow by default (`detail=full` for recursive payloads) |
 | `get_design_context` | Depth-limited tree with `detail` level (`minimal`/`compact`/`full`) |
 | `search_nodes` | Find nodes by name substring and/or type within a subtree |
 | `scan_text_nodes` | All text nodes in a subtree |

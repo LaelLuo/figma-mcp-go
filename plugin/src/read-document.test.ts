@@ -15,6 +15,13 @@ const makeNodeRequest = (nodeId: string) => ({
   params: {},
 });
 
+const makeNodesInfoRequest = (nodeIds: string[], params?: any) => ({
+  type: "get_nodes_info",
+  requestId: "req-nodes-1",
+  nodeIds,
+  params: params ?? {},
+});
+
 const toBase64 = (bytes: Uint8Array) => {
   const alphabet =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -171,5 +178,38 @@ describe("read-document fallback envelopes", () => {
     await expect(handleReadDocumentRequest(makeNodeRequest("0:1"))).rejects.toThrow(
       "get_node does not support PAGE nodes",
     );
+  });
+
+  it("get_nodes_info stays shallow instead of serializing full descendants", async () => {
+    const res = await handleReadDocumentRequest(makeNodesInfoRequest(["1:1"]));
+
+    expect(res?.data).toHaveLength(1);
+    expect(res?.data[0]).toMatchObject({
+      id: "1:1",
+      name: "Card",
+      type: "FRAME",
+    });
+    expect(res?.data[0].children).toBeUndefined();
+    expect(res?.data[0].characters).toBeUndefined();
+  });
+
+  it("get_nodes_info supports detail=full when recursive payload is explicitly requested", async () => {
+    const res = await handleReadDocumentRequest(
+      makeNodesInfoRequest(["1:1"], { detail: "full" }),
+    );
+
+    expect(res?.data).toHaveLength(1);
+    expect(res?.data[0]).toMatchObject({
+      id: "1:1",
+      name: "Card",
+      type: "FRAME",
+    });
+    expect(res?.data[0].children).toHaveLength(1);
+    expect(res?.data[0].children[0]).toMatchObject({
+      id: "2:1",
+      name: "Title",
+      type: "TEXT",
+      characters: "Hello fallback",
+    });
   });
 });

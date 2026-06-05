@@ -10,7 +10,7 @@
     { "name": "get_pages", "description": "All pages (IDs + names)" },
     { "name": "get_selection", "description": "Currently selected nodes" },
     { "name": "get_node", "description": "Single node by ID" },
-    { "name": "get_nodes_info", "description": "Multiple nodes by ID list" },
+    { "name": "get_nodes_info", "description": "Multiple nodes by ID list, shallow by default with optional detail=full" },
     { "name": "get_design_context", "description": "Depth-limited tree with detail level and component deduplication" },
     { "name": "search_nodes", "description": "Find nodes by name/type within a subtree" },
     { "name": "scan_text_nodes", "description": "All TEXT nodes in a subtree" },
