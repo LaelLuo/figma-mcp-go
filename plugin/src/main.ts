@@ -33,6 +33,37 @@ const handleRequest = async (request: any) => {
   }
 };
 
+const postProgress = (requestId: string, progress: number, message: string) => {
+  figma.ui.postMessage({
+    type: "progress_update",
+    requestId,
+    progress,
+    message,
+  });
+};
+
+let requestQueue: Promise<void> = Promise.resolve();
+
+const enqueueRequest = (request: any) => {
+  requestQueue = requestQueue
+    .catch(() => {
+      // Keep the queue alive after earlier request failures.
+    })
+    .then(async () => {
+      postProgress(request.requestId, 1, `accepted ${request.type}`);
+      const response = await handleRequest(request);
+      try {
+        figma.ui.postMessage(response);
+      } catch (err) {
+        figma.ui.postMessage({
+          type: response.type,
+          requestId: response.requestId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+};
+
 figma.showUI(__html__, { width: 320, height: 210 });
 sendStatus();
 
@@ -50,15 +81,6 @@ figma.ui.onmessage = async (message) => {
     return;
   }
   if (message.type === "server-request") {
-    const response = await handleRequest(message.payload);
-    try {
-      figma.ui.postMessage(response);
-    } catch (err) {
-      figma.ui.postMessage({
-        type: response.type,
-        requestId: response.requestId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+    enqueueRequest(message.payload);
   }
 };

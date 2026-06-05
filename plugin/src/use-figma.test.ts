@@ -11,10 +11,17 @@ const makeRequest = (code: string) => ({
 });
 
 beforeEach(() => {
+  const postedMessages: any[] = [];
   (globalThis as any).figma = {
     root: { name: "Fallback File" },
     currentPage: { id: "0:1", name: "Page 1" },
+    ui: {
+      postMessage: (payload: any) => {
+        postedMessages.push(payload);
+      },
+    },
   };
+  (globalThis as any).__postedMessages = postedMessages;
 });
 
 describe("handleUseFigmaRequest", () => {
@@ -60,5 +67,21 @@ describe("handleUseFigmaRequest", () => {
     );
 
     expect(response?.data).toBeUndefined();
+  });
+
+  it("emits progress heartbeats while use_figma is still running", async () => {
+    const response = await handleUseFigmaRequest(
+      makeRequest(`
+        await new Promise((resolve) => setTimeout(resolve, 2100));
+        return "done";
+      `),
+    );
+
+    expect(response?.data).toBe("done");
+    expect((globalThis as any).__postedMessages.some((msg: any) =>
+      msg.type === "progress_update" &&
+      msg.requestId === "req-use-figma-1" &&
+      msg.message === "running use_figma",
+    )).toBe(true);
   });
 });

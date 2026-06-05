@@ -15,15 +15,22 @@
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   function connect() {
-    if (socket) socket.close();
-    socket = new WebSocket(WS_URL);
+    // Detach the old close handler before replacing the socket. Otherwise a
+    // late onclose from the previous connection can null out the fresh socket.
+    if (socket) {
+      socket.onclose = null;
+      socket.close();
+    }
+    const ws = new WebSocket(WS_URL);
+    socket = ws;
 
-    socket.onopen = () => {
+    ws.onopen = () => {
       connected = true;
       parent.postMessage({ pluginMessage: { type: "ui-ready" } }, "*");
     };
 
-    socket.onclose = () => {
+    ws.onclose = () => {
+      if (socket !== ws) return;
       connected = false;
       socket = null;
       activeRequests.clear();
@@ -36,11 +43,12 @@
       }
     };
 
-    socket.onerror = () => {
+    ws.onerror = () => {
+      if (socket !== ws) return;
       connected = false;
     };
 
-    socket.onmessage = (event) => {
+    ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
         if (payload.requestId) {
@@ -83,7 +91,10 @@
     return () => {
       window.removeEventListener("message", handleMessage);
       if (reconnectTimer !== null) clearTimeout(reconnectTimer);
-      if (socket) socket.close();
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
     };
   });
 </script>
