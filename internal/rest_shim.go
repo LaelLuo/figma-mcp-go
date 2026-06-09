@@ -228,17 +228,30 @@ func buildOfficialDocumentFromPages(data map[string]interface{}) map[string]inte
 }
 
 func convertLocalNode(local map[string]interface{}) map[string]interface{} {
+	return convertLocalNodeWithOffset(local, 0, 0)
+}
+
+func convertLocalNodeWithOffset(local map[string]interface{}, parentX, parentY float64) map[string]interface{} {
 	nodeType := stringValue(local["type"])
+	bounds, hasBounds := boundsValue(local["bounds"])
+	childParentX := parentX
+	childParentY := parentY
+	if hasBounds {
+		bounds["x"] = parentX + numberValue(bounds["x"], 0)
+		bounds["y"] = parentY + numberValue(bounds["y"], 0)
+		childParentX = numberValue(bounds["x"], parentX)
+		childParentY = numberValue(bounds["y"], parentY)
+	}
 	node := map[string]interface{}{
 		"id":       stringValueOr(local["id"], "local-node"),
 		"name":     stringValueOr(local["name"], "Untitled"),
 		"type":     nodeType,
 		"visible":  true,
 		"opacity":  1.0,
-		"children": convertChildren(local["children"]),
+		"children": convertChildren(local["children"], childParentX, childParentY),
 	}
 
-	if bounds, ok := boundsValue(local["bounds"]); ok {
+	if hasBounds {
 		node["absoluteBoundingBox"] = bounds
 		node["absoluteRenderBounds"] = bounds
 	}
@@ -279,7 +292,7 @@ func convertLocalNode(local map[string]interface{}) map[string]interface{} {
 	return node
 }
 
-func convertChildren(value interface{}) []interface{} {
+func convertChildren(value interface{}, parentX, parentY float64) []interface{} {
 	rawChildren, ok := sliceValue(value)
 	if !ok {
 		return []interface{}{}
@@ -287,7 +300,7 @@ func convertChildren(value interface{}) []interface{} {
 	children := make([]interface{}, 0, len(rawChildren))
 	for _, child := range rawChildren {
 		if childMap, ok := mapValue(child); ok {
-			children = append(children, convertLocalNode(childMap))
+			children = append(children, convertLocalNodeWithOffset(childMap, parentX, parentY))
 		}
 	}
 	return children

@@ -32,6 +32,9 @@ func TestFigmaRestShimFileReturnsOfficialFileEnvelope(t *testing.T) {
 				"id":   "1:3",
 				"name": "Page 2",
 				"type": "CANVAS",
+				"bounds": map[string]interface{}{
+					"x": 100.0, "y": 200.0, "width": 1264.0, "height": 1680.0,
+				},
 				"children": []interface{}{
 					map[string]interface{}{
 						"id":   "2:4",
@@ -81,6 +84,10 @@ func TestFigmaRestShimFileReturnsOfficialFileEnvelope(t *testing.T) {
 	frame := page["children"].([]interface{})[0].(map[string]interface{})
 	if frame["absoluteBoundingBox"] == nil {
 		t.Fatalf("frame lacks absoluteBoundingBox: %#v", frame)
+	}
+	frameBounds := frame["absoluteBoundingBox"].(map[string]interface{})
+	if frameBounds["x"] != float64(110) || frameBounds["y"] != float64(220) {
+		t.Fatalf("frame absoluteBoundingBox = %#v, want x=110 y=220", frameBounds)
 	}
 	fills := frame["fills"].([]interface{})
 	paint := fills[0].(map[string]interface{})
