@@ -18,6 +18,9 @@ import (
 
 var bridgeLogger = log.New(os.Stderr, "[bridge] ", 0)
 
+// ErrBridgeBusy is returned when a Figma plugin request is already in flight.
+var ErrBridgeBusy = errors.New("figma plugin bridge is busy: another request is already running; concurrent requests are not supported")
+
 // pendingEntry holds the response channel and inactivity timer for an in-flight request.
 type pendingEntry struct {
 	ch    chan BridgeResponse
@@ -142,14 +145,6 @@ func (b *Bridge) readLoop(conn *websocket.Conn) {
 
 // Send sends a request to the plugin and waits for the response.
 func (b *Bridge) Send(ctx context.Context, requestType string, nodeIDs []string, params map[string]interface{}) (BridgeResponse, error) {
-	b.mu.RLock()
-	conn := b.conn
-	b.mu.RUnlock()
-
-	if conn == nil {
-		return BridgeResponse{}, errors.New("plugin not connected")
-	}
-
 	requestID := b.nextID()
 	req := BridgeRequest{
 		Type:      requestType,
@@ -174,6 +169,18 @@ func (b *Bridge) Send(ctx context.Context, requestType string, nodeIDs []string,
 	})
 
 	b.mu.Lock()
+	conn := b.conn
+	if conn == nil {
+		b.mu.Unlock()
+		entry.timer.Stop()
+		return BridgeResponse{}, errors.New("plugin not connected")
+	}
+	if len(b.pending) > 0 {
+		b.mu.Unlock()
+		entry.timer.Stop()
+		bridgeLogger.Printf("→ %s %s rejected: %v", requestID, requestType, ErrBridgeBusy)
+		return BridgeResponse{}, ErrBridgeBusy
+	}
 	b.pending[requestID] = entry
 	b.mu.Unlock()
 

@@ -55,6 +55,7 @@ func (l *Leader) Start() error {
 	mux.HandleFunc("/ping", l.handlePing)
 	mux.HandleFunc("/rpc", l.handleRPC)
 	mux.HandleFunc("/ws", l.handleWS)
+	NewFigmaRestShim(l.bridge).Register(mux)
 
 	srv := &http.Server{Handler: mux}
 	l.server = srv

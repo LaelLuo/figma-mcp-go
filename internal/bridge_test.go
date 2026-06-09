@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -186,6 +187,40 @@ func TestBridgeSend_Success(t *testing.T) {
 	}
 	if got.Data == nil {
 		t.Error("expected non-nil data in response")
+	}
+}
+
+func TestBridgeSend_RejectsConcurrentRequest(t *testing.T) {
+	b, clientConn := setupBridgeWithClient(t)
+	ctx := context.Background()
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := b.Send(ctx, "get_node", []string{"1:1"}, nil)
+		firstDone <- err
+	}()
+
+	var firstReq BridgeRequest
+	if err := wsjson.Read(ctx, clientConn, &firstReq); err != nil {
+		t.Fatalf("read first request: %v", err)
+	}
+
+	_, err := b.Send(ctx, "get_node", []string{"2:2"}, nil)
+	if !errors.Is(err, ErrBridgeBusy) {
+		t.Fatalf("second Send error = %v, want ErrBridgeBusy", err)
+	}
+
+	resp := BridgeResponse{
+		RequestID: firstReq.RequestID,
+		Type:      firstReq.Type,
+		Data:      map[string]any{"id": "1:1"},
+	}
+	if err := wsjson.Write(ctx, clientConn, resp); err != nil {
+		t.Fatalf("write first response: %v", err)
+	}
+
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first Send returned error: %v", err)
 	}
 }
 
