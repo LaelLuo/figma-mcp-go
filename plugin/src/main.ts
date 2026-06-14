@@ -44,6 +44,43 @@ const postProgress = (requestId: string, progress: number, message: string) => {
 
 let requestQueue: Promise<void> = Promise.resolve();
 
+// Per-request timeout (ms). A hung handler (e.g. exportAsync that never resolves)
+// must not block the serial queue forever — otherwise every later request stalls
+// behind it and the only recovery is manually re-running the plugin. Values sit a
+// few seconds ABOVE the Go bridge timeouts (use_figma/get_document = 90s, others
+// 30s) so the server reports the timeout first and the queue then auto-recovers.
+const LONG_REQUEST_TYPES = new Set([
+  "get_document",
+  "get_design_context",
+  "get_figjam",
+  "use_figma",
+]);
+const requestTimeoutMs = (type: string) =>
+  LONG_REQUEST_TYPES.has(type) ? 95000 : 35000;
+
+const withTimeout = <T>(promise: Promise<T>, ms: number, type: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `plugin request '${type}' timed out after ${ms}ms (queue auto-recovered; a stuck handler was abandoned)`,
+          ),
+        ),
+      ms,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
 const enqueueRequest = (request: any) => {
   requestQueue = requestQueue
     .catch(() => {
@@ -51,7 +88,22 @@ const enqueueRequest = (request: any) => {
     })
     .then(async () => {
       postProgress(request.requestId, 1, `accepted ${request.type}`);
-      const response = await handleRequest(request);
+      // handleRequest already swallows handler errors into an error response, so the
+      // only way this rejects is the timeout — which frees the queue for the next request.
+      let response: any;
+      try {
+        response = await withTimeout(
+          handleRequest(request),
+          requestTimeoutMs(request.type),
+          request.type,
+        );
+      } catch (err) {
+        response = {
+          type: request.type,
+          requestId: request.requestId,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
       try {
         figma.ui.postMessage(response);
       } catch (err) {
